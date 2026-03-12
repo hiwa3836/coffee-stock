@@ -4,49 +4,60 @@ import pandas as pd
 from datetime import datetime
 
 # 1. ページの設定
-st.set_page_config(page_title="RCS 在庫管理システム v2", layout="centered")
+st.set_page_config(page_title="RCS 在庫管理システム v3", layout="centered")
+
+# --- ⚙️ 設定: サイト全体のパスワード ---
+# 💡 実際には st.secrets 에 저장하는 것이 보안상 가장 좋지만, 우선은 코드에 직접 설정합니다.
+SITE_PASSWORD = "rcs3836"  # 접속 비밀번호를 여기서 수정하세요
 
 # 2. Google Sheets 接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. セッション状態の初期化（ログイン管理用）
+# 3. セッション状態の初期化
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_name = ""
 
-# --- サイドバー：ユーザー認証 ---
-with st.sidebar:
-    st.header("🔐 ユーザー認証")
-    if not st.session_state.logged_in:
-        user_input = st.text_input("ユーザー名を入力してください")
+# --- 🔑 ログイン画面 (로그인 전 표시) ---
+def login_screen():
+    st.title("🔒 Access Restricted")
+    st.info("このサイトを利用するにはログインが必要です。")
+    
+    with st.container():
+        input_user = st.text_input("担当者名 (User Name)")
+        input_password = st.text_input("パスワード (Password)", type="password")
+        
         if st.button("ログイン"):
-            if user_input.strip():
+            if input_password == SITE_PASSWORD and input_user.strip() != "":
                 st.session_state.logged_in = True
-                st.session_state.user_name = user_input
+                st.session_state.user_name = input_user
+                st.success("認証に成功しました！")
                 st.rerun()
+            elif input_password != SITE_PASSWORD:
+                st.error("パスワードが正しくありません。")
             else:
-                st.warning("名前を入力してください。")
-    else:
-        st.write(f"✅ ログイン中: **{st.session_state.user_name}** さん")
+                st.warning("担当者名を入力してください。")
+
+# --- 📦 メインコンテンツ (로그인 성공 시 표시) ---
+if not st.session_state.logged_in:
+    login_screen()
+else:
+    # --- サイドバー (로그아웃 버튼 등) ---
+    with st.sidebar:
+        st.write(f"👤 担当者: **{st.session_state.user_name}**")
         if st.button("ログアウト"):
             st.session_state.logged_in = False
-            st.session_state.user_name = ""
             st.rerun()
 
-# --- メインロジック（ログイン時のみ表示） ---
-if st.session_state.logged_in:
     st.title("☕ RCS 在庫管理システム")
 
     try:
-        # データの読み込み（2つのワークシートを使用）
-        # 1. 在庫状況シート (Inventory)
-        df = conn.read(worksheet="Inventory", ttl=0) # リアルタイム性を高めるためttl=0
+        # 데이터 읽기
+        df = conn.read(worksheet="Inventory", ttl=0)
         df.columns = df.columns.str.strip()
-        
-        # 2. 履歴記録シート (Log)
         df_log = conn.read(worksheet="Log", ttl=0)
 
-        # 現在の在庫状況を表示
+        # 📊 在庫状況
         st.subheader("📊 現在の在庫状況")
         st.dataframe(df, use_container_width=True, hide_index=True)
 
@@ -56,32 +67,28 @@ if st.session_state.logged_in:
 
         st.divider()
 
-        # 在庫調整セクション
-        st.subheader("📦 在庫の調整と記録")
+        # 📦 在庫調整
+        st.subheader("📦 在庫の調整")
+        item_col = df.columns[0]
+        qty_col = df.columns[1]
         
-        item_col = df.columns[0] # 品目名の列
-        qty_col = df.columns[1]  # 数量の列
-        
-        selected_item = st.selectbox("調整する品目を選択してください", df[item_col].tolist())
-        
-        # 現在の在庫数を取得
+        selected_item = st.selectbox("品目を選択", df[item_col].tolist())
         raw_qty = df[df[item_col] == selected_item][qty_col].values[0]
         current_qty = int(raw_qty) if str(raw_qty).isdigit() else 0
 
         st.info(f"現在の **{selected_item}** の在庫数: **{current_qty}**")
+        
+        # 0 입력 가능, 음수(출고) 및 양수(입고) 가능
+        diff = st.number_input("変更数量 (+入庫, -出庫)", value=0, step=1)
 
-        # 変更数量の入力（0やマイナスも入力可能に設定）
-        diff = st.number_input("変更数量を入力 (+入庫, -出庫)", value=0, step=1)
-
-        if st.button("💾 データを保存 (履歴に記録)"):
-            # 在庫データの計算と更新
+        if st.button("💾 変更を保存"):
             new_qty = current_qty + diff
             df.loc[df[item_col] == selected_item, qty_col] = new_qty
             
-            # 1. 在庫シートを更新
+            # 1. Inventory 업데이트
             conn.update(worksheet="Inventory", data=df)
 
-            # 2. 履歴（ログ）データの作成と追加
+            # 2. Log 업데이트
             new_log = pd.DataFrame([{
                 "日時": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "担当者": st.session_state.user_name,
@@ -89,27 +96,18 @@ if st.session_state.logged_in:
                 "変動": diff,
                 "最終在庫": new_qty
             }])
-            
-            # 既存のログに新しいログを結合
             updated_log = pd.concat([df_log, new_log], ignore_index=True)
-            
-            # 2. 履歴シートを更新
             conn.update(worksheet="Log", data=updated_log)
 
-            st.success(f"✅ {selected_item} の在庫が {new_qty} に更新され、履歴に記録されました！")
+            st.success(f"✅ 更新完了: {selected_item} -> {new_qty}")
             st.balloons()
             st.rerun()
 
-        # 直近の履歴を表示（任意）
-        with st.expander("🕒 直近の入出庫履歴を表示"):
+        # 🕒 履歴
+        with st.expander("🕒 直近の入出庫履歴"):
             if not df_log.empty:
-                st.table(df_log.tail(10)) # 最新の10件を表示
-            else:
-                st.write("履歴はまだありません。")
+                st.table(df_log.tail(10))
 
     except Exception as e:
-        st.error(f"エラーが発生しました: {e}")
-        st.info("Googleスプレッドシートに 'Inventory' と 'Log' という名前のシートがあるか確認してください。")
-
-else:
-    st.warning("左側のサイドバーからログインしてください。")
+        st.error(f"システムエラー: {e}")
+        st.info("スプレッドシートのシート名（Inventory, Log）を確認してください。")
