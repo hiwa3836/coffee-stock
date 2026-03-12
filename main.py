@@ -11,7 +11,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # キャッシュを10分(600秒)に設定して、API制限を回避します。
 try:
     # データの読み込み
-    df = conn.read(ttl=600) 
+    df = conn.read(ttl=60) 
     df.columns = df.columns.str.strip()
     
     st.subheader("📊 現在の在庫状況")
