@@ -2,7 +2,6 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
-import time
 
 # =========================
 # 1. ページ設定
@@ -28,7 +27,10 @@ def init_session():
         "logged_in": False,
         "user_name": "",
         "current_page": 1,
-        "updated_msg": False,
+        "flash_message": "",
+        "flash_type": "success",
+        "base_inventory_df": None,   # 사용자가 편집 시작한 기준 스냅샷
+        "inventory_loaded": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -39,18 +41,45 @@ init_session()
 # =========================
 # 4. 共通関数
 # =========================
-def read_sheet(sheet_name: str, ttl: int = 60) -> pd.DataFrame:
+def read_sheet(sheet_name: str, ttl: int = 30) -> pd.DataFrame:
     df = conn.read(worksheet=sheet_name, ttl=ttl)
     if df is None:
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
     return df
 
+def write_sheet(sheet_name: str, df: pd.DataFrame):
+    conn.update(worksheet=sheet_name, data=df)
+
+def set_flash(message: str, msg_type: str = "success"):
+    st.session_state.flash_message = message
+    st.session_state.flash_type = msg_type
+
+def show_flash():
+    msg = st.session_state.flash_message
+    msg_type = st.session_state.flash_type
+
+    if msg:
+        if msg_type == "success":
+            st.success(msg)
+        elif msg_type == "warning":
+            st.warning(msg)
+        elif msg_type == "error":
+            st.error(msg)
+        else:
+            st.info(msg)
+
+        st.session_state.flash_message = ""
+        st.session_state.flash_type = "success"
+
 def logout():
     st.session_state.logged_in = False
     st.session_state.user_name = ""
     st.session_state.current_page = 1
-    st.session_state.updated_msg = False
+    st.session_state.flash_message = ""
+    st.session_state.flash_type = "success"
+    st.session_state.base_inventory_df = None
+    st.session_state.inventory_loaded = False
     st.rerun()
 
 def login_screen():
@@ -68,14 +97,41 @@ def login_screen():
         else:
             st.error("認証情報が正しくありません。")
 
-def show_update_message():
-    if st.session_state.updated_msg:
-        placeholder = st.empty()
-        placeholder.success("✅ 更新が完了しました！")
-        time.sleep(1)  # 1秒だけ表示
-        placeholder.empty()
-        st.session_state.updated_msg = False
-        st.rerun()
+def ensure_inventory_loaded():
+    """
+    최초 진입/강제새로고침 시에만 기준 inventory를 세션에 적재
+    """
+    if (not st.session_state.inventory_loaded) or (st.session_state.base_inventory_df is None):
+        df = read_sheet("Inventory", ttl=0)
+        if df.empty:
+            return pd.DataFrame()
+        st.session_state.base_inventory_df = df.copy()
+        st.session_state.inventory_loaded = True
+    return st.session_state.base_inventory_df.copy()
+
+def refresh_inventory():
+    df = read_sheet("Inventory", ttl=0)
+    st.session_state.base_inventory_df = df.copy() if not df.empty else pd.DataFrame()
+    st.session_state.inventory_loaded = True
+
+def validate_inventory_df(df: pd.DataFrame):
+    if df.empty:
+        return False, "Inventory シートにデータがありません。"
+
+    if len(df.columns) < 2:
+        return False, "Inventory シートの列数が不足しています。少なくとも2列必要です。"
+
+    item_col = df.columns[0]
+    qty_col = df.columns[1]
+
+    if df[item_col].duplicated().any():
+        dupes = df[df[item_col].duplicated()][item_col].astype(str).tolist()
+        return False, f"品目名が重複しています: {', '.join(dupes[:5])}"
+
+    return True, ""
+
+def normalize_for_compare(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series, errors="coerce").fillna(0)
 
 def build_log_rows(changed_rows: pd.DataFrame, old_df: pd.DataFrame, item_col: str, qty_col: str):
     new_logs = []
@@ -97,6 +153,111 @@ def build_log_rows(changed_rows: pd.DataFrame, old_df: pd.DataFrame, item_col: s
 
     return pd.DataFrame(new_logs)
 
+def save_inventory_safely(base_df: pd.DataFrame, edited_df: pd.DataFrame):
+    """
+    동시 수정 충돌을 회피하는 저장 로직
+
+    흐름:
+    1) 사용자가 처음 본 기준 데이터(base_df)와 edited_df 비교해서 내가 바꾼 행 파악
+    2) 저장 직전에 최신 시트(latest_df) 재조회
+    3) 내가 바꾸려는 행이 latest_df에서 이미 달라졌으면 충돌로 중단
+    4) 충돌 없으면 latest_df에 내 변경만 반영 후 update
+    """
+    is_valid, msg = validate_inventory_df(base_df)
+    if not is_valid:
+        return False, msg
+
+    is_valid, msg = validate_inventory_df(edited_df)
+    if not is_valid:
+        return False, msg
+
+    item_col = base_df.columns[0]
+    qty_col = base_df.columns[1]
+
+    base_compare = normalize_for_compare(base_df[qty_col])
+    edited_compare = normalize_for_compare(edited_df[qty_col])
+
+    diff_mask = base_compare != edited_compare
+    changed_rows = edited_df[diff_mask].copy()
+
+    if changed_rows.empty:
+        return False, "変更された内容がありません。"
+
+    # 최신 시트 재조회
+    latest_df = read_sheet("Inventory", ttl=0)
+    if latest_df.empty:
+        return False, "最新の Inventory を取得できませんでした。"
+
+    is_valid, msg = validate_inventory_df(latest_df)
+    if not is_valid:
+        return False, msg
+
+    latest_item_col = latest_df.columns[0]
+    latest_qty_col = latest_df.columns[1]
+
+    # 컬럼 구조 다르면 중단
+    if item_col != latest_item_col or qty_col != latest_qty_col:
+        return False, "保存中に Inventory シートの列構成が変更されました。再読み込みしてください。"
+
+    # 품목 세트 동일 여부 확인
+    base_items = set(base_df[item_col].astype(str))
+    latest_items = set(latest_df[item_col].astype(str))
+    if base_items != latest_items:
+        return False, "保存中に品目一覧が変更されました。再読み込みしてください。"
+
+    # index를 품목명 기준으로 맞춤
+    base_indexed = base_df.set_index(item_col)
+    latest_indexed = latest_df.set_index(item_col)
+    changed_indexed = changed_rows.set_index(item_col)
+
+    conflict_items = []
+
+    for item_name in changed_indexed.index:
+        base_qty = pd.to_numeric(base_indexed.at[item_name, qty_col], errors="coerce")
+        latest_qty = pd.to_numeric(latest_indexed.at[item_name, qty_col], errors="coerce")
+
+        # 내가 편집 시작한 뒤, 다른 사람이 이미 바꿈
+        if pd.isna(base_qty):
+            base_qty = 0
+        if pd.isna(latest_qty):
+            latest_qty = 0
+
+        if float(base_qty) != float(latest_qty):
+            conflict_items.append(str(item_name))
+
+    if conflict_items:
+        conflict_preview = "、".join(conflict_items[:5])
+        return False, f"他のユーザーが先に更新しました。競合品目: {conflict_preview}。再読み込み後にやり直してください。"
+
+    # 충돌 없으면 최신 시트에 내 변경만 merge
+    merged_df = latest_df.copy()
+    merged_df = merged_df.set_index(item_col)
+
+    for item_name, row in changed_indexed.iterrows():
+        merged_df.at[item_name, qty_col] = row[qty_col]
+
+    merged_df = merged_df.reset_index()
+
+    # Inventory 저장
+    write_sheet("Inventory", merged_df)
+
+    # Log 저장
+    latest_log_df = read_sheet("Log", ttl=0)
+    new_log_df = build_log_rows(changed_rows, base_df, item_col, qty_col)
+
+    if latest_log_df.empty:
+        updated_log = new_log_df
+    else:
+        updated_log = pd.concat([latest_log_df, new_log_df], ignore_index=True)
+
+    write_sheet("Log", updated_log)
+
+    # 저장 성공 후 세션 기준 데이터도 최신으로 갱신
+    st.session_state.base_inventory_df = merged_df.copy()
+    st.session_state.inventory_loaded = True
+
+    return True, "✅ 更新が完了しました！"
+
 # =========================
 # 5. ログイン画面
 # =========================
@@ -115,27 +276,28 @@ with st.sidebar:
 st.subheader("☕ RCS 在庫管理")
 
 try:
-    df = read_sheet("Inventory", ttl=60)
-    old_df = df.copy()
+    base_df = ensure_inventory_loaded()
 
-    if df.empty:
+    if base_df.empty:
         st.warning("Inventory シートにデータがありません。")
         st.stop()
 
-    item_col = df.columns[0]
-    qty_col = df.columns[1]
+    is_valid, msg = validate_inventory_df(base_df)
+    if not is_valid:
+        st.error(msg)
+        st.stop()
 
-    st.write("")
+    item_col = base_df.columns[0]
+    qty_col = base_df.columns[1]
+
     st.subheader("📊 現在の在庫状況")
+    show_flash()
 
-    # 1秒だけ表示
-    show_update_message()
-
-    st.info("💡 「現在数量」のみ直接修正可能です。修正後、下の保存ボタンを押してください。")
+    st.info("💡 「現在数量」のみ直接修正可能です。修正後、保存ボタンを押してください。")
 
     # 列設定
     column_config = {}
-    for i, col in enumerate(df.columns):
+    for i, col in enumerate(base_df.columns):
         if i == 1:
             column_config[col] = st.column_config.NumberColumn(
                 format="%.1f",
@@ -145,44 +307,33 @@ try:
             column_config[col] = st.column_config.Column(disabled=True)
 
     edited_df = st.data_editor(
-        df,
+        base_df,
         use_container_width=True,
         hide_index=True,
         column_config=column_config,
         key="inventory_editor"
     )
 
-    col1, col2 = st.columns([1, 4])
+    col1, col2 = st.columns([1, 1])
 
     with col1:
         if st.button("💾 変更を保存", use_container_width=True):
-            diff_mask = old_df[qty_col] != edited_df[qty_col]
-            changed_rows = edited_df[diff_mask]
+            ok, message = save_inventory_safely(
+                st.session_state.base_inventory_df.copy(),
+                edited_df.copy()
+            )
 
-            if changed_rows.empty:
-                st.warning("変更された内容がありません。")
+            if ok:
+                set_flash(message, "success")
+                st.rerun()
             else:
-                # Inventory 更新
-                conn.update(worksheet="Inventory", data=edited_df)
-
-                # Log 更新
-                df_log = read_sheet("Log", ttl=0)
-                new_log_df = build_log_rows(changed_rows, old_df, item_col, qty_col)
-
-                if df_log.empty:
-                    updated_log = new_log_df
-                else:
-                    updated_log = pd.concat([df_log, new_log_df], ignore_index=True)
-
-                conn.update(worksheet="Log", data=updated_log)
-
-                st.cache_data.clear()
-                st.session_state.updated_msg = True
+                set_flash(message, "warning")
                 st.rerun()
 
     with col2:
-        if st.button("🔄 データを強制更新", use_container_width=True):
-            st.cache_data.clear()
+        if st.button("🔄 データを再読み込み", use_container_width=True):
+            refresh_inventory()
+            set_flash("最新データを再読み込みしました。", "info")
             st.rerun()
 
     # =========================
@@ -191,7 +342,7 @@ try:
     st.divider()
     st.subheader("🕒 入出庫履歴")
 
-    df_log_display = read_sheet("Log", ttl=60)
+    df_log_display = read_sheet("Log", ttl=30)
 
     if not df_log_display.empty:
         history_df = df_log_display.iloc[::-1].reset_index(drop=True)
@@ -203,7 +354,6 @@ try:
         display_df = history_df.head(total_limit)
         actual_max_page = max(1, min(max_pages, (len(display_df) - 1) // items_per_page + 1))
 
-        # 현재 페이지 보정
         if st.session_state.current_page > actual_max_page:
             st.session_state.current_page = actual_max_page
         if st.session_state.current_page < 1:
@@ -233,6 +383,6 @@ try:
 
 except Exception as e:
     if "429" in str(e):
-        st.error("⚠️ API制限に達しました。1分ほど待ってから再試行してください。")
+        st.error("⚠️ API制限に達しました。しばらく待ってから再試行してください。")
     else:
         st.error(f"システムエラー: {e}")
