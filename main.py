@@ -1,62 +1,64 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
-import pandas as pd
 
-st.set_page_config(page_title="在庫管理", layout="centered")
-st.title("☕ コーヒーサークル 在庫管理")
+# ページの設定
+st.set_page_config(page_title="在庫管理システム", layout="centered")
+st.title("☕ RCS 在庫管理")
 
-# 연결 설정
+# Google Sheets 接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# キャッシュを10分(600秒)に設定して、API制限を回避します。
 try:
-    # 데이터 읽기 (ttl=0으로 설정하면 실시간으로 새로고침됩니다)
-    df = conn.read(ttl=0)
-    
-    # 공백 제거 및 정리
+    # データの読み込み
+    df = conn.read(ttl=600) 
     df.columns = df.columns.str.strip()
     
     st.subheader("📊 現在の在庫状況")
     st.dataframe(df, use_container_width=True, hide_index=True)
 
+    # 最新データに更新するボタン
+    if st.button("🔄 最新の情報に更新"):
+        st.cache_data.clear()
+        st.rerun()
+
     st.divider()
 
     st.subheader("📦 在庫を調整する")
     
-    item_col = df.columns[0] # 첫번째 열 (品目名)
-    qty_col = df.columns[1]  # 두번째 열 (現在数量)
+    # 列名の取得（1列目：品目名、2列目：現在数量）
+    item_col = df.columns[0]
+    qty_col = df.columns[1]
     
-    items = df[item_col].tolist()
-    selected_item = st.selectbox("品目を選択してください", items)
-
-    # [핵심 수정] 가져온 수량을 강제로 숫자로 변환합니다!
+    # 品目の選択
+    selected_item = st.selectbox("品目を選択してください", df[item_col].tolist())
+    
+    # 現在の在庫数を取得
     raw_qty = df[df[item_col] == selected_item][qty_col].values[0]
+    current_qty = int(raw_qty) if str(raw_qty).isdigit() else 0
+
+    st.info(f"現在の **{selected_item}** の在庫数: **{current_qty}**")
     
-    try:
-        current_qty = int(raw_qty) # 숫자로 변환 시도
-    except:
-        current_qty = 0 # 만약 시트가 비어있거나 글자라면 0으로 취급
+    # 変更数量の入力
+    diff = st.number_input("変更数量を入力 (+入庫, -出庫)", step=1, value=0)
 
-    st.info(f"현재 **{selected_item}**의 수량: **{current_qty}**")
-
-    # 수량 변경 입력
-    diff = st.number_input("변경량 (입고 +, 출고 -)", step=1, value=0)
-
-    if st.button("適用 (시트에 저장)"):
+    if st.button("適用して保存"):
         if diff != 0:
-            # 계산 후 저장 (숫자 + 숫자)
+            # データの計算と更新
             new_qty = current_qty + diff
             df.loc[df[item_col] == selected_item, qty_col] = new_qty
             
-            # 구글 시트 업데이트
+            # Google Sheets を更新
             conn.update(data=df)
             
-            st.success(f"✅ {selected_item} 가 {new_qty}로 업데이트 되었습니다!")
+            # 保存後はキャッシュをクリアして最新状態を表示
+            st.cache_data.clear()
+            st.success(f"✅ {selected_item} の在庫を {new_qty} に更新しました！")
             st.balloons()
-            # 2초 뒤 화면 새로고침
             st.rerun()
         else:
-            st.warning("변경할 수량을 입력하세요.")
+            st.warning("変更する数量を入力してください。")
 
 except Exception as e:
-    st.error("오류가 발생했습니다!")
-    st.write(f"상세 에러: {e}")
+    st.error("しばらくしてから再試行してください（Google APIの制限）")
+    st.write(f"エラー詳細: {e}")
