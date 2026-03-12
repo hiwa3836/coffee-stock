@@ -149,6 +149,6 @@ else:
 
     except Exception as e:
         if "429" in str(e):
-            st.error("⚠️ API制限です。1分後にまた試してください。)
+            st.error("⚠️ API制限です。1分ほど待ってから再試行してください。")
         else:
             st.error(f"Error: {e}")
