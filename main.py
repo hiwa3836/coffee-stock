@@ -3,25 +3,27 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-# 1. ページの設定
-st.set_page_config(page_title="RCS 在庫管理システム v3", layout="centered")
+# 1. ページの設定 (페이지 설정)
+st.markdown("## ☕ RCS 在庫管理システム")
 
-# 패스워드 설정
+# 패스워드 설정 (Secrets 이용)
 try:
     SITE_PASSWORD = st.secrets["site_password"]
 except:
-    st.error("Secrets에 'site_password'가 설정되지 않았습니다.")
+    st.error("Secretsに 'site_password' が設定されていません。")
     st.stop()
 
-# 2. Google Sheets 接続
+# 2. Google Sheets 接続 (구글 시트 연결)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. セッション状態の初期化
+# 3. セッション状態の初期化 (세션 상태 초기화)
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_name = ""
+if "current_page" not in st.session_state:
+    st.session_state.current_page = 1
 
-# --- 🔑 ログイン画面 ---
+# --- 🔑 ログイン画面 (로그인 화면) ---
 def login_screen():
     st.title("🔒 アクセス制限")
     st.info("システムを利用するにはログインが必要です。")
@@ -41,7 +43,7 @@ def login_screen():
             else:
                 st.warning("担当者名を入力してください。")
 
-# --- 📦 メインコンテンツ ---
+# --- 📦 メ인 콘텐츠 ---
 if not st.session_state.logged_in:
     login_screen()
 else:
@@ -49,17 +51,18 @@ else:
         st.write(f"👤 担当者: **{st.session_state.user_name}**")
         if st.button("ログアウト"):
             st.session_state.logged_in = False
+            st.session_state.current_page = 1
             st.rerun()
 
     st.title("☕ RCS 在庫管理システム")
 
     try:
-        # API 횟수 제한 방지를 위해 ttl을 300(5분)으로 설정 (수정 시에만 초기화됨)
+        # 데이터 로드 (ttl=60초)
         df = conn.read(worksheet="Inventory", ttl=60)
         df.columns = df.columns.str.strip()
         df_log = conn.read(worksheet="Log", ttl=60)
 
-        # 📊 在庫状況
+        # 📊 現在の在庫状況 (현재 재고 상황)
         st.subheader("📊 現在の在庫状況")
         st.dataframe(df, use_container_width=True, hide_index=True)
 
@@ -69,33 +72,33 @@ else:
 
         st.divider()
 
-        # 📦 在庫調整
-        st.subheader("📦 在庫の調整 (入出庫)")
-        item_col = df.columns[0]
-        qty_col = df.columns[1]
+        # 📦 在庫の修正 (재고 수정 - 직접 입력 방식)
+        st.subheader("📦 在庫数量の修正")
+        item_col = df.columns[0] # 품목 컬럼
+        qty_col = df.columns[1]  # 수량 컬럼
         
         selected_item = st.selectbox("品目を選択してください", df[item_col].tolist())
         
-        # 소수점 지원을 위해 float으로 변환
+        # 현재 수량 가져오기 (소수점 한자리)
         raw_val = df[df[item_col] == selected_item][qty_col].values[0]
         try:
             current_qty = float(raw_val)
-        except (ValueError, TypeError):
+        except:
             current_qty = 0.0
 
-        st.info(f"現在の **{selected_item}** の在庫数: **{current_qty:.2f}**")
+        st.info(f"現在の **{selected_item}** の在庫数: **{current_qty:.1f}**")
         
-        # 입력창 소수점 지원 (step=0.1)
-        diff = st.number_input("変更数量 (+入庫 / -出庫)", value=0.0, step=0.1, format="%.2f")
+        # 직접 입력창 (소수점 한자리 step=0.1)
+        new_qty_input = st.number_input("修正後の在庫数を入力", value=current_qty, step=0.1, format="%.1f")
 
         if st.button("💾 変更を保存"):
-            new_qty = round(current_qty + diff, 3)
+            final_qty = round(float(new_qty_input), 1)
             
-            if new_qty < 0:
-                st.error(f"❌ 在庫不足です。現在の在庫({current_qty})を超える出주는できません。")
+            if final_qty < 0:
+                st.error("❌ 在庫数は0未満に設定できません。")
             else:
-                # 1. Inventory 업데이트
-                df.loc[df[item_col] == selected_item, qty_col] = new_qty
+                # 1. Inventory 업데이트 (직접 대입)
+                df.loc[df[item_col] == selected_item, qty_col] = final_qty
                 conn.update(worksheet="Inventory", data=df)
 
                 # 2. Log 업데이트
@@ -103,28 +106,57 @@ else:
                     "日時": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "担当者": st.session_state.user_name,
                     "品目": selected_item,
-                    "変動": diff,
-                    "最終在庫": new_qty
+                    "修正前": current_qty,
+                    "修正後": final_qty,
+                    "備考": "直接修正"
                 }])
                 updated_log = pd.concat([df_log, new_log], ignore_index=True)
                 conn.update(worksheet="Log", data=updated_log)
 
-                # 저장 후 캐시 삭제 (중요: 그래야 다음 로딩 때 API에서 새 데이터를 가져옴)
+                # 캐시 삭제 및 리프레시
                 st.cache_data.clear()
-                
-                st.success(f"✅ 更新完了: {selected_item} → {new_qty:.2f}")
+                st.success(f"✅ 更新完了: {selected_item} → {final_qty:.1f}")
                 st.balloons()
                 st.rerun()
 
-        # 🕒 履歴 (최신 순서로 정렬)
-        with st.expander("🕒 入出庫履歴 (最新 10件)"):
-            if not df_log.empty:
-                # iloc[::-1]를 사용하여 역순 정렬
-                st.table(df_log.iloc[::-1].head(10))
+        # 🕒 入出庫履歴 (최근 이력 - 페이지네이션 적용)
+        st.divider()
+        st.subheader("🕒 入出庫履歴 (最新履歴)")
+
+        if not df_log.empty:
+            # 최신순 정렬
+            history_df = df_log.iloc[::-1].reset_index(drop=True)
+            
+            # 페이지네이션 설정 (15개씩 최대 5페이지)
+            items_per_page = 15
+            max_pages = 5
+            total_display_limit = items_per_page * max_pages
+            display_df = history_df.head(total_display_limit)
+            
+            actual_max_page = min(max_pages, (len(display_df) - 1) // items_per_page + 1)
+
+            # 페이지 컨트롤러 UI
+            col_prev, col_page, col_next = st.columns([1, 2, 1])
+            with col_prev:
+                if st.button("⬅️ 前へ") and st.session_state.current_page > 1:
+                    st.session_state.current_page -= 1
+                    st.rerun()
+            with col_page:
+                st.write(f"**{st.session_state.current_page} / {actual_max_page} ページ**")
+            with col_next:
+                if st.button("次へ ➡️") and st.session_state.current_page < actual_max_page:
+                    st.session_state.current_page += 1
+                    st.rerun()
+
+            # 현재 페이지 데이터 출력
+            start_idx = (st.session_state.current_page - 1) * items_per_page
+            end_idx = start_idx + items_per_page
+            st.table(display_df.iloc[start_idx:end_idx])
+        else:
+            st.write("履歴がありません。")
 
     except Exception as e:
-        # Quota 에러 발생 시 안내
         if "429" in str(e):
-            st.error("⚠️ API 호출 제한에 도달했습니다. 1분만 기다려 주세요.")
+            st.error("⚠️ API制限に達しました。1分ほど待ってから再試行してください。")
         else:
             st.error(f"システムエラー: {e}")
