@@ -7,7 +7,7 @@ from datetime import datetime
 st.set_page_config(page_title="RCS 在庫管理システム v3", layout="centered")
 
 # --- ⚙️ 設定: サイト全体のパスワード ---
-SITE_PASSWORD = st.secrets["site_password"] 
+SITE_PASSWORD = st.secrets.get("site_password", "")
 # 2. Google Sheets 接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
