@@ -304,8 +304,9 @@ try:
                 time.sleep(0.8)
                 st.rerun()
             else:
-                guide_box.warning(message)
-                time.sleep(0.8)
+                warning_box = guide_box.warning(message)
+                time.sleep(5)
+                warning_box.empty()
                 guide_box.info(guide_text)
 
     with col2:
