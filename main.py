@@ -7,9 +7,7 @@ from datetime import datetime
 st.set_page_config(page_title="RCS 在庫管理システム v3", layout="centered")
 
 # --- ⚙️ 設定: サイト全体のパスワード ---
-# 💡 実際には st.secrets 에 저장하는 것이 보안상 가장 좋지만, 우선은 코드에 직접 설정합니다.
-SITE_PASSWORD = "rcs3836"  # 접속 비밀번호를 여기서 수정하세요
-
+SITE_PASSWORD = st.secrets["site_password"] 
 # 2. Google Sheets 接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
