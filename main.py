@@ -55,9 +55,9 @@ else:
 
     try:
         # API 횟수 제한 방지를 위해 ttl을 300(5분)으로 설정 (수정 시에만 초기화됨)
-        df = conn.read(worksheet="Inventory", ttl=300)
+        df = conn.read(worksheet="Inventory", ttl=60)
         df.columns = df.columns.str.strip()
-        df_log = conn.read(worksheet="Log", ttl=300)
+        df_log = conn.read(worksheet="Log", ttl=60)
 
         # 📊 在庫状況
         st.subheader("📊 現在の在庫状況")
