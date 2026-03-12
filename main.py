@@ -25,7 +25,7 @@ try:
 
     st.info(f"現在の **{selected_item}** の在庫: **{current_qty}**")
 
-    adjustment = st.number_input("変更量 (+입고, -출고)", step=1, value=0)
+    adjustment = st.number_input("変更量 (+入, -出)", step=1, value=0)
 
     if st.button("適用 (시트에 저장)"):
         # 계산
