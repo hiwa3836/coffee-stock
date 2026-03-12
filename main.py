@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
+import time  # 시간 지연을 위해 추가
 
 # 1. ページの設定
 st.set_page_config(page_title="RCS 在庫管理", layout="centered")
@@ -16,13 +17,13 @@ except:
 # 2. Google Sheets 接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. セッション状態の初期化
+# 3. セッション状態の初期화
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_name = ""
 if "current_page" not in st.session_state:
     st.session_state.current_page = 1
-if "updated_msg" not in st.session_state: # 갱신 메시지 상태 추가
+if "updated_msg" not in st.session_state:
     st.session_state.updated_msg = False
 
 # --- 🔑 ログイン画面 ---
@@ -37,7 +38,7 @@ def login_screen():
             st.session_state.user_name = input_user
             st.rerun()
         else:
-            st.error("認証情報가 올바르지 않습니다.")
+            st.error("認証情報が正しくありません。")
 
 # --- 📦 メインコンテンツ ---
 if not st.session_state.logged_in:
@@ -53,19 +54,24 @@ else:
 
     try:
         # 데이터 읽기
-        df = conn.read(worksheet="Inventory", ttl=10)
+        df = conn.read(worksheet="Inventory", ttl=60)
         df.columns = df.columns.str.strip()
         old_df = df.copy()
 
         st.write("") 
         st.subheader("📊 現在の在庫状況")
         
-        # 💡 요청하신 부분: 갱신 성공 시 초록색 메시지 표시
-        if st.session_state.updated_msg:
-            st.success("✅ 在庫データが正常に更新されました。 (재고 데이터가 정상적으로 갱신되었습니다.)")
-            st.session_state.updated_msg = False # 표시 후 초기화
+        # 💡 메시지가 들어갈 빈 공간(placeholder) 생성
+        msg_placeholder = st.empty()
 
-        st.info("💡 「現在数量」のみ直接修正可能です。修正後、下の保存ボタンを押してください。")
+        # 요청하신 초록색 체크 메시지 (상태가 True일 때만 실행)
+        if st.session_state.updated_msg:
+            msg_placeholder.success("✅ 更新が完了しました！ (갱신이 완료되었습니다!)")
+            time.sleep(3)           # 3초 대기
+            msg_placeholder.empty()  # 메시지 삭제
+            st.session_state.updated_msg = False # 상태 초기화
+
+        st.info("💡 「現在数量」のみ直接修正可能です. 修正後, 下の保存ボタンを押してください. ")
 
         # 컬럼 설정 (수량만 편집 가능)
         config = {}
@@ -113,7 +119,7 @@ else:
                     conn.update(worksheet="Log", data=updated_log)
 
                     st.cache_data.clear()
-                    st.session_state.updated_msg = True # 메시지 상태 활성화
+                    st.session_state.updated_msg = True # 메시지 표시 스위치 ON
                     st.rerun()
                 else:
                     st.warning("変更された内容がありません。")
@@ -123,10 +129,9 @@ else:
                 st.cache_data.clear()
                 st.rerun()
 
-        # 🕒 히스토리
+        # 🕒 히스토리 부분 생략 (이전과 동일)
         st.divider()
         st.subheader("🕒 入出庫履歴")
-
         df_log_display = conn.read(worksheet="Log", ttl=60)
         if not df_log_display.empty:
             history_df = df_log_display.iloc[::-1].reset_index(drop=True)
@@ -135,7 +140,6 @@ else:
             total_limit = items_per_page * max_pages
             display_df = history_df.head(total_limit)
             actual_max_page = min(max_pages, (len(display_df) - 1) // items_per_page + 1)
-
             p_col_prev, p_col_page, p_col_next = st.columns([1, 2, 1])
             with p_col_prev:
                 if st.button("⬅️ 前へ") and st.session_state.current_page > 1:
@@ -147,11 +151,8 @@ else:
                 if st.button("次へ ➡️") and st.session_state.current_page < actual_max_page:
                     st.session_state.current_page += 1
                     st.rerun()
-
             curr_page = st.session_state.current_page
             st.table(display_df.iloc[(curr_page - 1) * items_per_page : curr_page * items_per_page])
-        else:
-            st.write("履歴がありません。")
 
     except Exception as e:
         if "429" in str(e):
