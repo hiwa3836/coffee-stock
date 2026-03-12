@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
+import time
 
 # =========================
 # 1. ページ設定
@@ -27,8 +28,6 @@ def init_session():
         "logged_in": False,
         "user_name": "",
         "current_page": 1,
-        "flash_message": "",
-        "flash_type": "success",
         "base_inventory_df": None,   # 사용자가 편집 시작한 기준 스냅샷
         "inventory_loaded": False,
     }
@@ -51,33 +50,10 @@ def read_sheet(sheet_name: str, ttl: int = 30) -> pd.DataFrame:
 def write_sheet(sheet_name: str, df: pd.DataFrame):
     conn.update(worksheet=sheet_name, data=df)
 
-def set_flash(message: str, msg_type: str = "success"):
-    st.session_state.flash_message = message
-    st.session_state.flash_type = msg_type
-
-def show_flash():
-    msg = st.session_state.flash_message
-    msg_type = st.session_state.flash_type
-
-    if msg:
-        if msg_type == "success":
-            st.success(msg)
-        elif msg_type == "warning":
-            st.warning(msg)
-        elif msg_type == "error":
-            st.error(msg)
-        else:
-            st.info(msg)
-
-        st.session_state.flash_message = ""
-        st.session_state.flash_type = "success"
-
 def logout():
     st.session_state.logged_in = False
     st.session_state.user_name = ""
     st.session_state.current_page = 1
-    st.session_state.flash_message = ""
-    st.session_state.flash_type = "success"
     st.session_state.base_inventory_df = None
     st.session_state.inventory_loaded = False
     st.rerun()
@@ -230,8 +206,7 @@ def save_inventory_safely(base_df: pd.DataFrame, edited_df: pd.DataFrame):
         return False, f"他のユーザーが先に更新しました。競合品目: {conflict_preview}。再読み込み後にやり直してください。"
 
     # 충돌 없으면 최신 시트에 내 변경만 merge
-    merged_df = latest_df.copy()
-    merged_df = merged_df.set_index(item_col)
+    merged_df = latest_df.copy().set_index(item_col)
 
     for item_name, row in changed_indexed.iterrows():
         merged_df.at[item_name, qty_col] = row[qty_col]
@@ -291,9 +266,10 @@ try:
     qty_col = base_df.columns[1]
 
     st.subheader("📊 現在の在庫状況")
-    show_flash()
 
-    st.info("💡 「現在数量」のみ直接修正可能です。修正後、保存ボタンを押してください。")
+    guide_box = st.empty()
+    guide_text = "💡 「現在数量」のみ直接修正可能です。修正後、保存ボタンを押してください。"
+    guide_box.info(guide_text)
 
     # 列設定
     column_config = {}
@@ -324,16 +300,19 @@ try:
             )
 
             if ok:
-                set_flash(message, "success")
+                guide_box.success("✅ 更新が完了しました！")
+                time.sleep(0.8)
                 st.rerun()
             else:
-                set_flash(message, "warning")
-                st.rerun()
+                guide_box.warning(message)
+                time.sleep(0.8)
+                guide_box.info(guide_text)
 
     with col2:
         if st.button("🔄 データを再読み込み", use_container_width=True):
             refresh_inventory()
-            set_flash("最新データを再読み込みしました。", "info")
+            guide_box.success("🔄 最新データを再読み込みしました。")
+            time.sleep(0.8)
             st.rerun()
 
     # =========================
