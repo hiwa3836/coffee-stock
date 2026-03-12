@@ -6,8 +6,10 @@ from datetime import datetime
 # 1. ページの設定
 st.set_page_config(page_title="RCS 在庫管理システム v3", layout="centered")
 
-# --- ⚙️ 設定: サイト全体のパスワード ---
-SITE_PASSWORD = st.secrets.get("site_password", "")
+# .get()을 쓰면 비밀번호가 없을 때 빈 문자열("")을 가져오지만,
+# 아래처럼 쓰면 비밀번호가 설정 안 됐을 때 에러를 내서 관리자가 바로 알게 해줍니다.
+SITE_PASSWORD = st.secrets["site_password"]
+
 # 2. Google Sheets 接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
