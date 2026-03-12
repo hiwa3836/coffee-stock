@@ -10,7 +10,7 @@ st.set_page_config(page_title="RCS 在庫管理", layout="centered")
 try:
     SITE_PASSWORD = st.secrets["site_password"]
 except:
-    st.error("Secretsに 'site_password' 가 설정되지 않았습니다.")
+    st.error("Secretsに 'site_password' が設定されていません。")
     st.stop()
 
 # 2. Google Sheets 接続
@@ -37,7 +37,7 @@ def login_screen():
             st.session_state.user_name = input_user
             st.rerun()
         else:
-            st.error("認証 정보가 올바르지 않습니다.")
+            st.error("認証情報に誤りがあります。")
 
 # --- 📦 メインコンテンツ ---
 if not st.session_state.logged_in:
@@ -149,6 +149,6 @@ else:
 
     except Exception as e:
         if "429" in str(e):
-            st.error("⚠️ API制限です。1분 뒤 다시 시도해주세요.")
+            st.error("⚠️ API制限です。1分後にまた試してください。)
         else:
             st.error(f"Error: {e}")
