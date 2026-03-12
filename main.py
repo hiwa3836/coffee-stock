@@ -41,7 +41,7 @@ init_session()
 # 4. 共通関数
 # =========================
 def read_sheet(sheet_name: str, ttl: int = 30) -> pd.DataFrame:
-    df = conn.read(worksheet=sheet_name, ttl=ttl)
+    df = conn.read(worksheet=sheet_name, ttl=10)
     if df is None:
         return pd.DataFrame()
     df.columns = df.columns.str.strip()
@@ -160,7 +160,7 @@ def save_inventory_safely(base_df: pd.DataFrame, edited_df: pd.DataFrame):
         return False, "変更された内容がありません。"
 
     # 최신 시트 재조회
-    latest_df = read_sheet("Inventory", ttl=0)
+    latest_df = read_sheet("Inventory", ttl=10)
     if latest_df.empty:
         return False, "最新の Inventory を取得できませんでした。"
 
@@ -322,7 +322,7 @@ try:
     st.divider()
     st.subheader("🕒 入出庫履歴")
 
-    df_log_display = read_sheet("Log", ttl=30)
+    df_log_display = read_sheet("Log", ttl=60)
 
     if not df_log_display.empty:
         history_df = df_log_display.iloc[::-1].reset_index(drop=True)
