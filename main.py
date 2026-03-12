@@ -53,7 +53,7 @@ else:
 
     try:
         # 데이터 읽기
-        df = conn.read(worksheet="Inventory", ttl=60)
+        df = conn.read(worksheet="Inventory", ttl=10)
         df.columns = df.columns.str.strip()
         old_df = df.copy()
 
