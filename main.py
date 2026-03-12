@@ -28,7 +28,7 @@ try:
     selected_item = st.selectbox("品目を選択してください", items)
 
     # 현재 해당 품목의 수량 가져오기
-    current_qty = df[df['品目名'] == selected_item]['現在數量'].values[0]
+    current_qty = df[df['品目名'] == selected_item]['현재수량_또는_시트에적힌글자'].values[0]
     st.info(f"選択した **{selected_item}**の現在の数量は **{current_qty}**です。")
 
     # 조정 수량 입력
