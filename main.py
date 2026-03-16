@@ -39,17 +39,21 @@ try:
     res = supabase.table("inventory").select("*").order("item_name").execute()
     df = pd.DataFrame(res.data)
 
-    # 수정 화면
-    edit_df = st.data_editor(
-        df,
-        column_config={
-            "id": None, 
-            "item_name": "품목명",
-            "current_stock": st.column_config.NumberColumn("수량"),
-            "unit": "단위"
-        },
-        hide_index=True
-    )
+# 재고 수정 에디터 (화면 표시 설정)
+        edited_df = st.data_editor(
+            df,
+            column_config={
+                "id": None,               # ID 숨김
+                "item_name": "품목명",      # 이름 변경
+                "current_stock": "수량",    # 이름 변경
+                "unit": "단위",            # 이름 변경
+                "min_stock": None,        # 숨김 (알림 기준은 뒤에서 작동하되 화면엔 안 보임)
+                "last_editor": None,      # 숨김
+                "updated_at": None        # 숨김
+            },
+            hide_index=True,              # 왼쪽 숫자 인덱스 숨김
+            use_container_width=True      # 가로 꽉 채우기
+        )
 
     if st.button("저장하기"):
         for i, row in edit_df.iterrows():
