@@ -150,15 +150,30 @@ with c_log:
     st.subheader("🕒 최근 변경 이력")
     history = get_recent_logs()
     if not history.empty:
-        history["created_at"] = pd.to_datetime(history["created_at"]).dt.strftime("%m/%d %H:%M")
-        st.dataframe(history[["created_at", "user_name", "item_name", "new_stock"]].head(10), use_container_width=True)
+        # 에러 방지를 위해 'coerce' 옵션 사용 (이상한 날짜는 NaT로 변환)
+        history["created_at_dt"] = pd.to_datetime(history["created_at"], errors='coerce')
+        # 날짜 변환이 불가능한 행은 제거
+        history = history.dropna(subset=["created_at_dt"])
+        
+        # 화면 표시용 포맷팅
+        history["display_time"] = history["created_at_dt"].dt.strftime("%m/%d %H:%M")
+        
+        st.dataframe(
+            history[["display_time", "user_name", "item_name", "new_stock"]].head(10), 
+            use_container_width=True,
+            column_config={"display_time": "일시", "user_name": "담당자", "item_name": "품목", "new_stock": "수량"}
+        )
 
 with c_trend:
     st.subheader("📈 소모품 소비 흐름 (7일)")
-    if not history.empty:
-        # 간단한 요일별 업데이트 횟수 시각화
-        history["date"] = pd.to_datetime(history["created_at"]).dt.date
+    if not history.empty and "created_at_dt" in history.columns:
+        # 이미 변환된 'created_at_dt'를 활용해서 날짜만 추출
+        history["date"] = history["created_at_dt"].dt.date
         trend_data = history.groupby("date").size()
-        st.line_chart(trend_data)
+        
+        if not trend_data.empty:
+            st.line_chart(trend_data)
+        else:
+            st.info("데이터가 부족하여 차트를 그릴 수 없습니다.")
     else:
         st.info("표시할 데이터가 없습니다.")
