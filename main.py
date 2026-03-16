@@ -29,7 +29,7 @@ def send_discord_alert_embed(item_name, new_stock, min_stock, unit, retry=3):
     payload = {
         "embeds": [{
             "title": "🚨 在庫補充の通知 (재고 보충 알림)",
-            "color": 16711680, # Red
+            "color": 16711680,
             "fields": [
                 {"name": "品目名", "value": item_name, "inline": False},
                 {"name": "現在の在庫", "value": f"{new_stock}{unit}", "inline": True},
@@ -104,20 +104,20 @@ def add_new_item(category, item_name, current_stock, unit, min_stock, user):
     db.table("logs").insert(log_entry).execute()
 
 # =========================
-# UPDATE ENGINE
+# UPDATE ENGINE (Refactored for Absolute Values)
 # =========================
 
-def process_inventory_changes(changes_df, user):
-    if changes_df.empty:
+def process_inventory_changes(changed_df, user):
+    if changed_df.empty:
         return 0
 
     updates = []
     logs = []
     alerts = []
 
-    for _, row in changes_df.iterrows():
-        new_val = int(row["current_stock"] + row["delta"])
-        old_val = int(row["current_stock"])
+    for _, row in changed_df.iterrows():
+        new_val = int(row["current_stock_new"])
+        old_val = int(row["current_stock_old"])
 
         updates.append({
             "id": int(row["id"]),
@@ -266,31 +266,23 @@ with st.expander("➕ 新規品目の登録 (신규 품목 등록)"):
 st.divider()
 
 # =========================
-# INVENTORY EDITOR (Delta Mode)
+# INVENTORY EDITOR (Absolute Input Mode)
 # =========================
 
-st.subheader("📦 入出庫管理 (増減入力)")
-st.caption("既存の在庫を上書きせず、右側の「入出庫 (+/-)」欄に変動量のみを入力してください。")
+st.subheader("📦 在庫状況の更新 (재고 현황 갱신)")
+st.caption("実際の在庫数を確認し、「現在の在庫」列の数字を直接書き換えてください。")
 
 if not df.empty:
-    df_edit = df.copy()
-    df_edit["delta"] = 0 
-
     edited_df = st.data_editor(
-        df_edit,
+        df,
         column_config={
             "id": None,
             "category": st.column_config.TextColumn("カテゴリ", disabled=True),
             "item_name": st.column_config.TextColumn("品目名", disabled=True),
-            "current_stock": st.column_config.NumberColumn("現在の在庫", disabled=True),
+            # disabled=False로 변경하여 엑셀처럼 직접 수정 가능하게 오픈
+            "current_stock": st.column_config.NumberColumn("現在の在庫", disabled=False, min_value=0, step=1),
             "unit": st.column_config.TextColumn("単位", disabled=True),
             "min_stock": st.column_config.NumberColumn("最小基準", disabled=True),
-            "delta": st.column_config.NumberColumn(
-                "入出庫 (+/-)", 
-                help="正の数(+)は入庫、負の数(-)は出庫を意味します。",
-                step=1,
-                format="%d"
-            ),
             "last_editor": None,
             "updated_at": None
         },
@@ -298,16 +290,28 @@ if not df.empty:
         use_container_width=True
     )
 
-    changed_rows = edited_df[edited_df["delta"] != 0].copy()
+    # 기존 데이터와 수정된 데이터를 ID 기준으로 병합(Merge)하여 변경점 추출
+    merged = df.merge(
+        edited_df[["id", "current_stock"]], 
+        on="id", 
+        suffixes=("_old", "_new")
+    )
+    changed_rows = merged[merged["current_stock_old"] != merged["current_stock_new"]].copy()
 
     if not changed_rows.empty:
-        st.warning("⚠️ 以下の品目の在庫変動内容を確認の上、最終承認してください。")
+        st.warning("⚠️ 以下の品目の変更内容を確認の上、最終承認してください。")
         
-        preview_df = changed_rows[["item_name", "current_stock", "delta", "unit"]].copy()
-        preview_df["最終予想在庫"] = preview_df["current_stock"] + preview_df["delta"]
-        preview_df.rename(columns={"item_name": "品目名", "current_stock": "既存在庫", "delta": "変動量"}, inplace=True)
+        # 변경 프리뷰 데이터프레임
+        preview_df = changed_rows[["item_name", "current_stock_old", "current_stock_new", "unit"]].copy()
+        preview_df["増減"] = preview_df["current_stock_new"] - preview_df["current_stock_old"]
+        preview_df.rename(columns={
+            "item_name": "品目名", 
+            "current_stock_old": "変更前 (기존)", 
+            "current_stock_new": "変更後 (최종)"
+        }, inplace=True)
         
-        st.dataframe(preview_df, hide_index=True, use_container_width=True)
+        # 보기 좋게 컬럼 순서 재배치
+        st.dataframe(preview_df[["品目名", "変更前 (기존)", "増減", "変更後 (최종)", "unit"]], hide_index=True, use_container_width=True)
 
         if st.button("✅ 変更の最終承認とDB反映", type="primary", use_container_width=True):
             try:
