@@ -35,7 +35,7 @@ if not st.session_state.ok:
             st.error("정보가 일치하지 않습니다.")
     st.stop()
 
-# 4. 메인 화면 상단
+# 4. 메인 화면
 st.title("☕ RCS 재고 관리")
 with st.sidebar:
     st.write(f"👤 담당자: **{st.session_state.u}**")
@@ -85,18 +85,14 @@ try:
                     "new_stock": int(new_val)
                 }).execute()
                 
-# 3) 디스코드 알림 (요청하신 형식으로 변경)
-if new_val <= row['min_stock']:
-    # 요청하신 형식: [품목명] 부족! 현재: [수량][단위] 변경 공지
-    msg = {
-        "content": f"🚨 **{row['item_name']} 부족! 현재: {new_val}{row['unit']} 변경 공지**"
-    }
-    requests.post(webhook, json=msg)
-
-# ...
+                # 3) 디스코드 알림 (요청하신 형식으로 변경)
+                if new_val <= row['min_stock']:
+                    msg = {"content": f"🚨 **{row['item_name']} 부족! 현재: {new_val}{row['unit']} 변경 공지**"}
+                    requests.post(webhook, json=msg)
+                updated = True
         
         if updated:
-            st.success("재고가 업데이트되고 로그가 기록되었습니다!")
+            st.success("✅ 업데이트 완료 및 로그 기록됨!")
             time.sleep(1)
             st.rerun()
 
@@ -104,15 +100,11 @@ if new_val <= row['min_stock']:
     st.divider()
     st.subheader("🕒 최근 변경 기록")
     
-    # 로그 데이터 가져오기 (최신순 75개 = 15개씩 5페이지분량)
     res_log = supabase.table("logs").select("*").order("created_at", desc=True).limit(75).execute()
     df_log = pd.DataFrame(res_log.data)
 
     if not df_log.empty:
-        # 시간 형식 예쁘게 변환
         df_log['created_at'] = pd.to_datetime(df_log['created_at']).dt.strftime('%m-%d %H:%M')
-        
-        # 페이지네이션 로직 (15개씩 자르기)
         total_logs = len(df_log)
         items_per_page = 15
         max_page = (total_logs - 1) // items_per_page
@@ -121,14 +113,12 @@ if new_val <= row['min_stock']:
         start_idx = curr_page * items_per_page
         end_idx = start_idx + items_per_page
         
-        # 테이블 표시
         display_log = df_log.iloc[start_idx:end_idx][['created_at', 'user_name', 'item_name', 'new_stock', 'old_stock']]
         st.table(display_log.rename(columns={
             'created_at': '일시', 'user_name': '담당자', 'item_name': '품목', 
             'new_stock': '변경후', 'old_stock': '변경전'
         }))
 
-        # 페이지 버튼
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
             if st.button("⬅️ 이전", disabled=(curr_page == 0)):
@@ -144,4 +134,4 @@ if new_val <= row['min_stock']:
         st.info("아직 변경 기록이 없습니다.")
 
 except Exception as e:
-    st.error(f"오류 발생: {e}")
+    st.error(f"시스템 오류 발생: {e}")
