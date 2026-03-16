@@ -44,7 +44,7 @@ def push_discord(msg):
 # 3. サイド바 (FILTERS)
 # =========================
 with st.sidebar:
-    st.title("⚙️ 操作パネル")
+    st.title("⚙️ RCS管理パネル")
     raw_df = get_inventory()
     
     if "category" in raw_df.columns:
@@ -83,7 +83,7 @@ st.divider()
 # =========================
 # 5. 在庫管理エディタ (EDITOR)
 # =========================
-st.subheader("📦 消耗品在庫状況")
+st.subheader("📦 RCS在庫状況")
 
 edited_df = st.data_editor(
     df,
