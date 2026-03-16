@@ -7,41 +7,42 @@ import time
 # 1. 설정
 st.set_page_config(page_title="RCS 재고 관리 시스템", layout="centered")
 
-# 2. 정보 연결 및 세션 관리
+# 2. 정보 연결
 try:
     url = st.secrets["supabase_url"]
     key = st.secrets["supabase_key"]
     webhook = st.secrets["discord_webhook_url"]
-    pw = st.secrets["site_password"]
+    # pw = st.secrets["site_password"]  # 테스트 중에는 비번 필요 없음
     supabase = create_client(url, key)
 except Exception as e:
     st.error(f"Secrets 설정 오류: {e}")
     st.stop()
 
-if "ok" not in st.session_state: st.session_state.ok = False
+# --- [테스트 모드] 로그인 강제 승인 ---
+if "ok" not in st.session_state: st.session_state.ok = True  # 기본값을 True로 설정
+if "u" not in st.session_state: st.session_state.u = "TestUser"  # 테스트용 이름
 if "page" not in st.session_state: st.session_state.page = 0
 
-# 3. 로그인 로직
-if not st.session_state.ok:
-    st.subheader("🔒 RCS 로그인")
-    u_name = st.text_input("담당자 성함")
-    u_pw = st.text_input("접속 비밀번호", type="password")
-    if st.button("접속", use_container_width=True):
-        if u_pw == pw and u_name.strip():
-            st.session_state.ok = True
-            st.session_state.u = u_name.strip()
-            st.rerun()
-        else:
-            st.error("정보가 일치하지 않습니다.")
-    st.stop()
+# 3. 로그인 로직 (테스트를 위해 잠시 주석 처리)
+# if not st.session_state.ok:
+#     st.subheader("🔒 RCS 로그인")
+#     u_name = st.text_input("담당자 성함")
+#     u_pw = st.text_input("접속 비밀번호", type="password")
+#     if st.button("접속", use_container_width=True):
+#         if u_pw == pw and u_name.strip():
+#             st.session_state.ok = True
+#             st.session_state.u = u_name.strip()
+#             st.rerun()
+#         else:
+#             st.error("정보가 일치하지 않습니다.")
+#     st.stop()
 
 # 4. 메인 화면
-st.title("☕ RCS 재고 관리")
+st.title("☕ RCS 재고 관리 (Test Mode)")
 with st.sidebar:
-    st.write(f"👤 담당자: **{st.session_state.u}**")
-    if st.button("로그아웃"):
-        st.session_state.ok = False
-        st.rerun()
+    st.write(f"👤 접속자: **{st.session_state.u}**")
+    if st.button("로그아웃 (테스트 중 비활성)"):
+        st.info("테스트 모드입니다.")
 
 try:
     # 데이터 읽기
@@ -85,14 +86,14 @@ try:
                     "new_stock": int(new_val)
                 }).execute()
                 
-                # 3) 디스코드 알림 (요청하신 형식으로 변경)
+                # 3) 디스코드 알림
                 if new_val <= row['min_stock']:
                     msg = {"content": f"🚨 **{row['item_name']} 부족! 현재: {new_val}{row['unit']} 변경 공지**"}
                     requests.post(webhook, json=msg)
                 updated = True
         
         if updated:
-            st.success("✅ 업데이트 완료 및 로그 기록됨!")
+            st.success("✅ 업데이트 완료!")
             time.sleep(1)
             st.rerun()
 
@@ -105,6 +106,7 @@ try:
 
     if not df_log.empty:
         df_log['created_at'] = pd.to_datetime(df_log['created_at']).dt.strftime('%m-%d %H:%M')
+        
         total_logs = len(df_log)
         items_per_page = 15
         max_page = (total_logs - 1) // items_per_page
@@ -131,7 +133,7 @@ try:
                 st.session_state.page += 1
                 st.rerun()
     else:
-        st.info("아직 변경 기록이 없습니다.")
+        st.info("기록 없음")
 
 except Exception as e:
-    st.error(f"시스템 오류 발생: {e}")
+    st.error(f"오류: {e}")
