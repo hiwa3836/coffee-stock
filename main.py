@@ -28,7 +28,7 @@ db = init_db()
 # 2. DATA ENGINE
 # =========================
 def get_inventory():
-    res = db.table("inventory").select("*").order("category").order("item_name").execute()
+    res = db.table("inventory").select("*").order("item_name").execute()
     return pd.DataFrame(res.data)
 
 def get_recent_logs():
