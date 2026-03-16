@@ -85,11 +85,15 @@ try:
                     "new_stock": int(new_val)
                 }).execute()
                 
-                # 3) 디스코드 알림
-                if new_val <= row['min_stock']:
-                    msg = {"content": f"🚨 **{row['item_name']} - {new_val} - {row['unit']}** (부족!)"}
-                    requests.post(webhook, json=msg)
-                updated = True
+# 3) 디스코드 알림 (요청하신 형식으로 변경)
+if new_val <= row['min_stock']:
+    # 요청하신 형식: [품목명] 부족! 현재: [수량][단위] 변경 공지
+    msg = {
+        "content": f"🚨 **{row['item_name']} 부족! 현재: {new_val}{row['unit']} 변경 공지**"
+    }
+    requests.post(webhook, json=msg)
+
+# ...
         
         if updated:
             st.success("재고가 업데이트되고 로그가 기록되었습니다!")
