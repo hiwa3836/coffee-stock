@@ -3,177 +3,162 @@ from supabase import create_client
 import pandas as pd
 import requests
 import time
+from datetime import datetime, timedelta
 
 # =========================
-# 1. CONFIG
+# 1. CONFIG & SYSTEM
 # =========================
-st.set_page_config(
-    page_title="RCS Inventory System",
-    layout="centered"
+st.set_page_config(page_title="RCS OPS Center", layout="wide")
+
+# CSS: 가독성 중심의 스타일링
+st.markdown("""
+    <style>
+    [data-testid="stMetricValue"] { font-size: 1.8rem; color: #ff4b4b; }
+    .stDataFrame { border: 1px solid #e6e9ef; border-radius: 10px; }
+    </style>
+""", unsafe_allow_html=True)
+
+@st.cache_resource
+def init_db():
+    return create_client(st.secrets["supabase_url"], st.secrets["supabase_key"])
+
+db = init_db()
+
+# =========================
+# 2. DATA ENGINE
+# =========================
+def get_inventory():
+    res = db.table("inventory").select("*").order("category").order("item_name").execute()
+    return pd.DataFrame(res.data)
+
+def get_recent_logs():
+    # 최근 7일간의 로그 분석용
+    last_week = (datetime.now() - timedelta(days=7)).isoformat()
+    res = db.table("logs").select("*").filter("created_at", "gte", last_week).execute()
+    return pd.DataFrame(res.data)
+
+def push_discord(msg):
+    try: requests.post(st.secrets["discord_webhook_url"], json={"content": msg}, timeout=2)
+    except: pass
+
+# =========================
+# 3. SIDEBAR (FILTERS)
+# =========================
+with st.sidebar:
+    st.title("⚙️ OPS Filter")
+    raw_df = get_inventory()
+    categories = ["전체"] + sorted(raw_df["category"].unique().tolist())
+    selected_cat = st.selectbox("카테고리 선택", categories)
+    
+    st.divider()
+    user_name = st.text_input("담당자 성함", value="운영진")
+    
+    if st.button("🔄 데이터 새로고침"):
+        st.cache_data.clear()
+        st.rerun()
+
+# 데이터 필터링 적용
+df = raw_df if selected_cat == "전체" else raw_df[raw_df["category"] == selected_cat]
+
+# =========================
+# 4. DASHBOARD (ANALYTICS)
+# =========================
+# 🚨 부족 품목 계산
+shortage_items = raw_df[raw_df["current_stock"] <= raw_df["min_stock"]]
+
+col1, col2, col3 = st.columns([1, 1, 2])
+with col1:
+    st.metric("재고 부족 품목", f"{len(shortage_items)} 건")
+with col2:
+    total_items = len(raw_df)
+    st.metric("관리 품목 총계", f"{total_items} 종")
+with col3:
+    if not shortage_items.empty:
+        items_str = ", ".join(shortage_items["item_name"].tolist())
+        st.error(f"**즉시 확인 필요:** {items_str}")
+    else:
+        st.success("✅ 모든 소모품 재고가 충분합니다.")
+
+st.divider()
+
+# =========================
+# 5. MAIN EDITOR
+# =========================
+st.subheader("📦 소모품 현황 관리")
+
+# 데이터 에디터 구성
+edited_df = st.data_editor(
+    df,
+    column_config={
+        "id": None,
+        "category": st.column_config.TextColumn("분류", disabled=True),
+        "item_name": st.column_config.TextColumn("품목명", disabled=True),
+        "current_stock": st.column_config.NumberColumn("현재 수량", format="%d", help="실제 재고를 입력하세요"),
+        "unit": st.column_config.TextColumn("단위", disabled=True),
+        "min_stock": st.column_config.NumberColumn("최저 기준", disabled=True),
+        "last_editor": st.column_config.TextColumn("최종 수정", disabled=True),
+        "updated_at": None
+    },
+    hide_index=True,
+    use_container_width=True,
+    key="ops_editor"
 )
 
-# =========================
-# 2. CONNECT
-# =========================
-@st.cache_resource
-def init_supabase():
-    url = st.secrets["supabase_url"]
-    key = st.secrets["supabase_key"]
-    return create_client(url, key)
-
-supabase = init_supabase()
-webhook = st.secrets["discord_webhook_url"]
-
-# =========================
-# 3. CACHE DATA
-# =========================
-@st.cache_data(ttl=5) # 테스트를 위해 캐시 주기를 조금 줄였습니다
-def load_inventory():
-    res = supabase.table("inventory").select("*").order("item_name").execute()
-    return pd.DataFrame(res.data)
-
-@st.cache_data(ttl=5)
-def load_logs():
-    res = supabase.table("logs").select("*").order("created_at", desc=True).limit(75).execute()
-    return pd.DataFrame(res.data)
-
-# =========================
-# 4. WEBHOOK (RETRY)
-# =========================
-def send_discord_alert(message, retry=3):
-    for i in range(retry):
-        try:
-            res = requests.post(webhook, json={"content": message}, timeout=3)
-            if res.status_code == 204: return # 성공 시 리턴
-        except:
-            time.sleep(1)
-
-# =========================
-# 5. INVENTORY UPDATE
-# =========================
-def update_inventory_batch(old_df, new_df, user):
-    updates = []
-    logs = []
-    alerts = []
-
-    for i, row in new_df.iterrows():
-        # ID 기준으로 이전 데이터 매칭
-        old_row = old_df[old_df["id"] == row["id"]].iloc[0]
-        old_stock = int(old_row["current_stock"])
-        new_stock = int(row["current_stock"])
-
-        if old_stock == new_stock:
-            continue
-
-        # 1) Inventory Update List
-        updates.append({
-            "id": row["id"],
-            "current_stock": new_stock,
-            "last_editor": user
-        })
-
-        # 2) Logs List
-        logs.append({
-            "user_name": user,
-            "item_name": row["item_name"],
-            "old_stock": old_stock,
-            "new_stock": new_stock
-        })
-
-        # 3) Alert List (요청 문구 적용)
-        if new_stock <= row["min_stock"]:
-            alerts.append(f"🚨 **{row['item_name']} 부족! 현재: {new_stock}{row['unit']} 변경 공지**")
-
-    # DB 반영
-    for u in updates:
-        supabase.table("inventory").update({
-            "current_stock": u["current_stock"],
-            "last_editor": u["last_editor"]
-        }).eq("id", u["id"]).execute()
-
-    if logs:
-        supabase.table("logs").insert(logs).execute()
-
-    for msg in alerts:
-        send_discord_alert(msg)
-
-    return len(updates)
-
-# =========================
-# 6. SESSION
-# =========================
-if "user" not in st.session_state: st.session_state.user = "TestUser"
-if "page" not in st.session_state: st.session_state.page = 0
-
-# =========================
-# 7. UI (상단)
-# =========================
-st.title("☕ RCS Inventory")
-st.write(f"접속자: **{st.session_state.user}** (Test Mode)")
-
-# =========================
-# 8. LOAD & SHOW
-# =========================
-try:
-    df_inventory = load_inventory()
-
-    # --- 재고 수정 테이블 ---
-    edited_df = st.data_editor(
-        df_inventory,
-        column_config={
-            "id": None,
-            "item_name": "품목명",
-            "current_stock": st.column_config.NumberColumn("현재 수량", format="%d"),
-            "unit": "단위",
-            "min_stock": None, "last_editor": None, "updated_at": None
-        },
-        hide_index=True,
-        use_container_width=True,
-        key="inventory_editor"
-    )
-
-    if st.button("💾 변경사항 저장", use_container_width=True):
-        count = update_inventory_batch(df_inventory, edited_df, st.session_state.user)
-        if count > 0:
-            st.success(f"{count}개 항목 업데이트 완료!")
-            st.cache_data.clear() # 캐시 강제 초기화
-            time.sleep(1)
-            st.rerun()
-        else:
-            st.info("변경사항이 없습니다.")
-
-    # --- 로그 섹션 ---
-    st.divider()
-    st.subheader("🕒 최근 변경 기록")
-    df_logs = load_logs()
-
-    if not df_logs.empty:
-        df_logs["created_at"] = pd.to_datetime(df_logs["created_at"]).dt.strftime("%m-%d %H:%M")
+# 저장 로직
+if st.button("💾 변경사항 일괄 저장", use_container_width=True, type="primary"):
+    diff = df[df["current_stock"] != edited_df["current_stock"]]
+    
+    if not diff.empty:
+        updates, logs, alerts = [], [], []
         
-        per_page = 15
-        total = len(df_logs)
-        max_page = (total - 1) // per_page
-        page = st.session_state.page
+        for _, row in diff.iterrows():
+            new_val = edited_df.loc[edited_df["id"] == row["id"], "current_stock"].values[0]
+            
+            # 1. 업데이트 리스트
+            updates.append({"id": row["id"], "current_stock": new_val, "last_editor": user_name})
+            
+            # 2. 로그 리스트
+            logs.append({
+                "user_name": user_name, "item_name": row["item_name"],
+                "old_stock": int(row["current_stock"]), "new_stock": int(new_val)
+            })
+            
+            # 3. 중복 알림 방지 로직 (기준값 이하고, 기존보다 줄어들었을 때만 발송)
+            if new_val <= row["min_stock"] and new_val < row["current_stock"]:
+                alerts.append(f"🚨 **[재고경보] {row['item_name']}** : {new_val}{row['unit']} (기준: {row['min_stock']})")
 
-        start = page * per_page
-        end = start + per_page
-        display = df_logs.iloc[start:end][["created_at", "user_name", "item_name", "new_stock", "old_stock"]]
+        # DB 실행
+        for u in updates:
+            db.table("inventory").update({"current_stock": u["current_stock"], "last_editor": u["last_editor"]}).eq("id", u["id"]).execute()
+        if logs:
+            db.table("logs").insert(logs).execute()
+        for msg in alerts:
+            push_discord(msg)
+            
+        st.success(f"{len(updates)}건 수정 완료. (알림 {len(alerts)}건 발송)")
+        time.sleep(1)
+        st.cache_data.clear()
+        st.rerun()
 
-        st.table(display.rename(columns={
-            "created_at": "일시", "user_name": "담당자", "item_name": "품목",
-            "new_stock": "변경후", "old_stock": "변경전"
-        }))
+# =========================
+# 6. RECENT ACTIVITY
+# =========================
+st.divider()
+c_log, c_trend = st.columns([1, 1])
 
-        c1, c2, c3 = st.columns([1, 2, 1])
-        with c1:
-            if st.button("Prev", disabled=(page == 0)):
-                st.session_state.page -= 1
-                st.rerun()
-        with c2:
-            st.write(f"Page {page+1} / {max_page+1}")
-        with c3:
-            if st.button("Next", disabled=(page >= max_page)):
-                st.session_state.page += 1
-                st.rerun()
-except Exception as e:
-    st.error(f"Error: {e}")
+with c_log:
+    st.subheader("🕒 최근 변경 이력")
+    history = get_recent_logs()
+    if not history.empty:
+        history["created_at"] = pd.to_datetime(history["created_at"]).dt.strftime("%m/%d %H:%M")
+        st.dataframe(history[["created_at", "user_name", "item_name", "new_stock"]].head(10), use_container_width=True)
+
+with c_trend:
+    st.subheader("📈 소모품 소비 흐름 (7일)")
+    if not history.empty:
+        # 간단한 요일별 업데이트 횟수 시각화
+        history["date"] = pd.to_datetime(history["created_at"]).dt.date
+        trend_data = history.groupby("date").size()
+        st.line_chart(trend_data)
+    else:
+        st.info("표시할 데이터가 없습니다.")
