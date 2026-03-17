@@ -83,7 +83,7 @@ def convert_df_to_csv(df):
     return df.to_csv(index=False).encode('utf-8-sig')
 
 def add_new_item(category, item_name, current_stock, unit, min_stock, user):
-    """新規品目の登録"""
+    """新規品目の登録 (신규 품목 등록)"""
     new_item = {
         "category": category,
         "item_name": item_name,
@@ -95,16 +95,26 @@ def add_new_item(category, item_name, current_stock, unit, min_stock, user):
     }
     db.table("inventory").insert(new_item).execute()
     
-    log_entry = {
+    db.table("logs").insert({
         "user_name": user,
         "item_name": f"[新規] {item_name}",
         "old_stock": 0,
         "new_stock": current_stock
-    }
-    db.table("logs").insert(log_entry).execute()
+    }).execute()
+
+def delete_item(item_id, item_name, user):
+    """品目の削除 (품목 삭제)"""
+    db.table("inventory").delete().eq("id", item_id).execute()
+    
+    db.table("logs").insert({
+        "user_name": user,
+        "item_name": f"[削除] {item_name}",
+        "old_stock": 0,
+        "new_stock": 0
+    }).execute()
 
 # =========================
-# UPDATE ENGINE (Refactored for Absolute Values)
+# UPDATE ENGINE
 # =========================
 
 def process_inventory_changes(changed_df, user):
@@ -151,18 +161,11 @@ def process_inventory_changes(changed_df, user):
             .eq("id", u["id"])\
             .execute()
 
-    # ---------- LOG INSERT ----------
     if logs:
         db.table("logs").insert(logs).execute()
 
-    # ---------- ALERT ----------
     for alert in alerts:
-        send_discord_alert_embed(
-            alert["item_name"], 
-            alert["new_stock"], 
-            alert["min_stock"], 
-            alert["unit"]
-        )
+        send_discord_alert_embed(alert["item_name"], alert["new_stock"], alert["min_stock"], alert["unit"])
 
     return len(updates)
 
@@ -174,19 +177,12 @@ with st.sidebar:
     st.title("⚙️ RCS 管理")
 
     raw_df = get_inventory()
-
-    if not raw_df.empty and "category" in raw_df.columns:
-        categories = ["すべて"] + sorted(raw_df["category"].dropna().unique())
-        selected = st.selectbox("カテゴリ", categories)
-        df = raw_df if selected == "すべて" else raw_df[raw_df["category"] == selected]
-    else:
-        df = raw_df
+    df = raw_df.copy() # 원본 보존
 
     st.divider()
+    user = st.text_input("担当者名 (담당자명)", value="管理者")
 
-    user = st.text_input("担当者名", value="管理者")
-
-    if st.button("🔄 データ更新", use_container_width=True):
+    if st.button("🔄 データ更新 (새로고침)", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
         
@@ -215,117 +211,180 @@ else:
 c1, c2, c3 = st.columns([1,1,2])
 
 with c1:
-    st.metric("不足品目数", len(shortage))
+    st.metric("不足品目数 (부족 품목)", len(shortage))
 
 with c2:
-    st.metric("総管理品目数", len(raw_df))
+    st.metric("総管理品目数 (총 품목)", len(raw_df))
 
 with c3:
     if not shortage.empty:
-        st.error(
-            "補充必要: " + ", ".join(shortage["item_name"].tolist())
-        )
+        st.error("🚨 補充必要: " + ", ".join(shortage["item_name"].tolist()))
     else:
-        st.success("✅ 全在庫正常")
+        st.success("✅ 全在庫正常 (모든 재고 정상)")
 
 st.divider()
 
 # =========================
-# ADD NEW ITEM (Expander Form)
+# ITEM MANAGEMENT (Add & Delete)
 # =========================
 
-with st.expander("➕ 新規品目の登録 (신규 품목 등록)"):
-    with st.form("new_item_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            new_cat = st.text_input("カテゴリ (카테고리)", placeholder="例: 飲料, 文房具")
+col_add, col_del = st.columns(2)
+
+with col_add:
+    with st.expander("➕ 新規品目の登録 (신규 품목 등록)"):
+        with st.form("new_item_form", clear_on_submit=True):
+            new_cat = st.text_input("カテゴリ (카테고리)", placeholder="例: コーヒー豆, 消耗品")
             new_name = st.text_input("品目名 (품목명)*")
-        with col2:
-            col2_1, col2_2, col2_3 = st.columns(3)
-            with col2_1:
-                new_stock = st.number_input("初期在庫", min_value=0, step=1)
-            with col2_2:
-                new_min = st.number_input("最小基準", min_value=0, step=1)
-            with col2_3:
-                new_unit = st.text_input("単位", value="個")
+            
+            c_a1, c_a2, c_a3 = st.columns(3)
+            with c_a1: new_stock = st.number_input("初期在庫", min_value=0, step=1)
+            with c_a2: new_min = st.number_input("最小基準", min_value=0, step=1)
+            with c_a3: new_unit = st.text_input("単位 (단위)", value="個")
+                    
+            if st.form_submit_button("💾 登録する", use_container_width=True):
+                if not new_name.strip() or not new_cat.strip():
+                    st.error("カテゴリと品目名は必須です。")
+                else:
+                    try:
+                        add_new_item(new_cat, new_name, new_stock, new_unit, new_min, user)
+                        st.success(f"「{new_name}」登録完了！")
+                        st.cache_data.clear()
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"エラー: {e}")
+
+with col_del:
+    with st.expander("🗑️ 品目の削除 (단종 품목 삭제)"):
+        if not raw_df.empty:
+            with st.form("delete_item_form"):
+                del_cat = st.selectbox("カテゴリを選択", sorted(raw_df["category"].unique()))
                 
-        submitted = st.form_submit_button("💾 登録する", use_container_width=True)
-        if submitted:
-            if not new_name.strip():
-                st.error("品目名は必須です。 (품목명은 필수입니다.)")
-            else:
-                try:
-                    add_new_item(new_cat, new_name, new_stock, new_unit, new_min, user)
-                    st.success(f"「{new_name}」が登録されました！")
-                    st.cache_data.clear()
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"登録エラー: {e}")
+                # 선택된 카테고리에 맞는 품목만 필터링
+                filtered_items = raw_df[raw_df["category"] == del_cat]
+                del_item_name = st.selectbox("削除する品目名", filtered_items["item_name"].tolist())
+                
+                # 선택된 품목의 ID 찾기
+                del_item_id = filtered_items[filtered_items["item_name"] == del_item_name]["id"].values[0] if not filtered_items.empty else None
+                
+                st.warning("⚠️ 削除すると元に戻せません。(삭제 시 복구 불가)")
+                if st.form_submit_button("🗑️ 完全に削除する", use_container_width=True) and del_item_id:
+                    try:
+                        delete_item(del_item_id, del_item_name, user)
+                        st.success(f"「{del_item_name}」を削除しました。")
+                        st.cache_data.clear()
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"エラー: {e}")
+        else:
+            st.info("データがありません。")
 
 st.divider()
 
 # =========================
-# INVENTORY EDITOR (Absolute Input Mode)
+# INVENTORY EDITOR (Smart Tabs & Visual UX)
 # =========================
 
 st.subheader("📦 在庫状況の更新 (재고 현황 갱신)")
-st.caption("実際の在庫数を確認し、「現在の在庫」列の数字を直接書き換えてください。")
+
+# 💡 Upgrade 1: 모바일 실사용 부족 품목 전용 필터
+show_shortage = st.checkbox("🚨 不足品目のみ表示 (부족 품목만 모아보기)", value=False)
 
 if not df.empty:
-    edited_df = st.data_editor(
-        df,
-        column_config={
-            "id": None,
-            "category": st.column_config.TextColumn("カテゴリ", disabled=True),
-            "item_name": st.column_config.TextColumn("品目名", disabled=True),
-            # disabled=False로 변경하여 엑셀처럼 직접 수정 가능하게 오픈
-            "current_stock": st.column_config.NumberColumn("現在の在庫", disabled=False, min_value=0, step=1),
-            "unit": st.column_config.TextColumn("単位", disabled=True),
-            "min_stock": st.column_config.NumberColumn("最小基準", disabled=True),
-            "last_editor": None,
-            "updated_at": None
-        },
-        hide_index=True,
-        use_container_width=True
-    )
+    # 💡 Upgrade 2: 직관적인 신호등 상태 부여
+    def get_status(row):
+        if row["current_stock"] <= row["min_stock"]: return "🔴"
+        elif row["current_stock"] <= row["min_stock"] + 2: return "🟡"
+        else: return "🟢"
 
-    # 기존 데이터와 수정된 데이터를 ID 기준으로 병합(Merge)하여 변경점 추출
-    merged = df.merge(
-        edited_df[["id", "current_stock"]], 
-        on="id", 
-        suffixes=("_old", "_new")
-    )
-    changed_rows = merged[merged["current_stock_old"] != merged["current_stock_new"]].copy()
+    display_df = df.copy()
+    display_df["状態"] = display_df.apply(get_status, axis=1)
+    
+    # 체크박스 활성화 시 필터링
+    if show_shortage:
+        display_df = display_df[display_df["current_stock"] <= display_df["min_stock"]]
 
-    if not changed_rows.empty:
-        st.warning("⚠️ 以下の品目の変更内容を確認の上、最終承認してください。")
-        
-        # 변경 프리뷰 데이터프레임
-        preview_df = changed_rows[["item_name", "current_stock_old", "current_stock_new", "unit"]].copy()
-        preview_df["増減"] = preview_df["current_stock_new"] - preview_df["current_stock_old"]
-        preview_df.rename(columns={
-            "item_name": "品目名", 
-            "current_stock_old": "変更前 (기존)", 
-            "current_stock_new": "変更後 (최종)"
-        }, inplace=True)
-        
-        # 보기 좋게 컬럼 순서 재배치
-        st.dataframe(preview_df[["品目名", "変更前 (기존)", "増減", "変更後 (최종)", "unit"]], hide_index=True, use_container_width=True)
+    if display_df.empty:
+        st.success("素晴らしい！現在表示する品目はありません。(표시할 부족 품목이 없습니다.)")
+    else:
+        # 💡 Upgrade 3: 카테고리별 탭(Tabs) UI 구성
+        categories = sorted(display_df["category"].dropna().unique())
+        tabs = st.tabs(["すべて (전체)"] + categories)
 
-        if st.button("✅ 変更の最終承認とDB反映", type="primary", use_container_width=True):
-            try:
-                with st.spinner('データ更新中...'):
-                    count = process_inventory_changes(changed_rows, user)
-                    
-                if count > 0:
-                    st.success(f"{count}個の品目の在庫が正常に更新されました。")
-                    st.cache_data.clear()
-                    time.sleep(1)
-                    st.rerun()
-                    
-            except Exception as e:
-                st.error(f"保存中にエラーが発生しました: {e}")
+        tab_data = {"すべて (전체)": display_df}
+        for cat in categories:
+            tab_data[cat] = display_df[display_df["category"] == cat]
+
+        edited_dfs = []
+
+        # 탭 순회 렌더링
+        for i, tab in enumerate(tabs):
+            with tab:
+                tab_name = list(tab_data.keys())[i]
+                current_tab_df = tab_data[tab_name]
+                
+                if current_tab_df.empty:
+                    st.caption("該当する品目がありません。")
+                    continue
+
+                edited_tab_df = st.data_editor(
+                    current_tab_df,
+                    key=f"editor_{tab_name}",
+                    column_config={
+                        "id": None,
+                        "状態": st.column_config.TextColumn("状態", disabled=True),
+                        "category": None, # 탭으로 구분하므로 표에서는 생략
+                        "item_name": st.column_config.TextColumn("品目名", disabled=True),
+                        "current_stock": st.column_config.NumberColumn("現在の在庫", disabled=False, min_value=0, step=1),
+                        "min_stock": st.column_config.NumberColumn("最小", disabled=True),
+                        "unit": st.column_config.TextColumn("単位", disabled=True),
+                        "last_editor": None,
+                        "updated_at": None
+                    },
+                    column_order=["状態", "item_name", "current_stock", "min_stock", "unit"], 
+                    hide_index=True,
+                    use_container_width=True
+                )
+                edited_dfs.append(edited_tab_df)
+
+        # 병합 및 변경점 추출
+        if edited_dfs:
+            final_edited_df = pd.concat(edited_dfs).drop_duplicates(subset=['id'], keep='last')
+
+            merged = df.merge(
+                final_edited_df[["id", "current_stock"]], 
+                on="id", 
+                suffixes=("_old", "_new")
+            )
+            changed_rows = merged[merged["current_stock_old"] != merged["current_stock_new"]].copy()
+
+            if not changed_rows.empty:
+                st.warning("⚠️ 以下の変更内容を確認の上、最終承認してください。")
+                
+                preview_df = changed_rows[["item_name", "current_stock_old", "current_stock_new", "unit"]].copy()
+                preview_df["増減"] = preview_df["current_stock_new"] - preview_df["current_stock_old"]
+                preview_df.rename(columns={
+                    "item_name": "品目名", 
+                    "current_stock_old": "変更前", 
+                    "current_stock_new": "変更後"
+                }, inplace=True)
+                
+                st.dataframe(preview_df[["品目名", "変更前", "増減", "変更後", "unit"]], hide_index=True, use_container_width=True)
+
+                if st.button("✅ 変更の最終承認とDB反映", type="primary", use_container_width=True):
+                    try:
+                        with st.spinner('データ更新中...'):
+                            count = process_inventory_changes(changed_rows, user)
+                            
+                        if count > 0:
+                            st.success(f"{count}個の品目の在庫が正常に更新されました。")
+                            st.cache_data.clear()
+                            time.sleep(1)
+                            st.rerun()
+                            
+                    except Exception as e:
+                        st.error(f"保存中にエラーが発生しました: {e}")
 else:
     st.info("データがありません。新規品目を登録してください。")
 
@@ -341,10 +400,7 @@ history = get_logs()
 with c1:
     st.subheader("🕒 最近の変動履歴")
     if not history.empty:
-        history["created_at_dt"] = pd.to_datetime(
-            history["created_at"],
-            errors="coerce"
-        )
+        history["created_at_dt"] = pd.to_datetime(history["created_at"], errors="coerce")
         history = history.dropna(subset=["created_at_dt"])
         history["time"] = history["created_at_dt"].dt.strftime("%m/%d %H:%M")
         history["増減"] = history["new_stock"] - history["old_stock"]
