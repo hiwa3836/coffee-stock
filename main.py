@@ -131,7 +131,7 @@ def main():
     inject_custom_css()
     init_state()
 
-    st.title("📦 現場在庫管理")
+    st.title("📦 RCS在庫管理")
     
     tab1, tab2, tab3 = st.tabs(["📝 日次棚卸", "📋 変更履歴", "⚙️ アイテム管理"])
 
