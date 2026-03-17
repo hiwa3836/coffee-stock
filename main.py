@@ -349,6 +349,9 @@ if not df.empty:
                 edited_dfs.append(edited_tab_df)
 
         # 병합 및 변경점 추출
+      # (앞부분 탭 렌더링 로직은 동일...)
+        
+        # 병합 및 변경점 추출
         if edited_dfs:
             final_edited_df = pd.concat(edited_dfs).drop_duplicates(subset=['id'], keep='last')
 
@@ -358,9 +361,13 @@ if not df.empty:
                 suffixes=("_old", "_new")
             )
             changed_rows = merged[merged["current_stock_old"] != merged["current_stock_new"]].copy()
+            
+            # 변경 여부 확인 변수
+            has_changes = not changed_rows.empty
 
-            if not changed_rows.empty:
-                st.warning("⚠️ 以下の変更内容を確認の上、最終承認してください。")
+            # 변경 사항이 있을 때만 프리뷰 표 노출
+            if has_changes:
+                st.warning("⚠️ 以下の変更内容を確認の上、最終承認してください。 (아래 변경 사항을 확인 후 승인해 주세요.)")
                 
                 preview_df = changed_rows[["item_name", "current_stock_old", "current_stock_new", "unit"]].copy()
                 preview_df["増減"] = preview_df["current_stock_new"] - preview_df["current_stock_old"]
@@ -372,19 +379,25 @@ if not df.empty:
                 
                 st.dataframe(preview_df[["品目名", "変更前", "増減", "変更後", "unit"]], hide_index=True, use_container_width=True)
 
-                if st.button("✅ 変更の最終承認とDB反映", type="primary", use_container_width=True):
-                    try:
-                        with st.spinner('データ更新中...'):
-                            count = process_inventory_changes(changed_rows, user)
-                            
-                        if count > 0:
-                            st.success(f"{count}個の品目の在庫が正常に更新されました。")
-                            st.cache_data.clear()
-                            time.sleep(1)
-                            st.rerun()
-                            
-                    except Exception as e:
-                        st.error(f"保存中にエラーが発生しました: {e}")
+            # 💡 버튼은 항상 노출하되, 변경 사항이 없으면 disabled=True 로 비활성화
+            if st.button("✅ 変更の最終承認とDB反映 (변경 승인 및 저장)", type="primary", use_container_width=True, disabled=not has_changes):
+                try:
+                    with st.spinner('データ更新中...'):
+                        count = process_inventory_changes(changed_rows, user)
+                        
+                    if count > 0:
+                        st.success(f"{count}個の品目の在庫が正常に更新されました。")
+                        st.cache_data.clear()
+                        time.sleep(1)
+                        st.rerun()
+                        
+                except Exception as e:
+                    st.error(f"保存中にエラーが発生しました: {e}")
+            
+            # 버튼이 비활성화 상태일 때 안내 문구 출력
+            if not has_changes:
+                st.caption("※ 表の数字を変更すると、上の保存ボタンが押せるようになります。 (표의 숫자를 변경하면 저장 버튼이 활성화됩니다.)")
+                
 else:
     st.info("データがありません。新規品目を登録してください。")
 
