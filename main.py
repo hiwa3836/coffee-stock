@@ -288,11 +288,9 @@ st.divider()
 
 st.subheader("📦 在庫状況の更新 (재고 현황 갱신)")
 
-# 💡 Upgrade 1: 모바일 실사용 부족 품목 전용 필터
 show_shortage = st.checkbox("🚨 不足品目のみ表示 (부족 품목만 모아보기)", value=False)
 
 if not df.empty:
-    # 💡 Upgrade 2: 직관적인 신호등 상태 부여
     def get_status(row):
         if row["current_stock"] <= row["min_stock"]: return "🔴"
         elif row["current_stock"] <= row["min_stock"] + 2: return "🟡"
@@ -301,14 +299,12 @@ if not df.empty:
     display_df = df.copy()
     display_df["状態"] = display_df.apply(get_status, axis=1)
     
-    # 체크박스 활성화 시 필터링
     if show_shortage:
         display_df = display_df[display_df["current_stock"] <= display_df["min_stock"]]
 
     if display_df.empty:
         st.success("素晴らしい！現在表示する品目はありません。(표시할 부족 품목이 없습니다.)")
     else:
-        # 💡 Upgrade 3: 카테고리별 탭(Tabs) UI 구성
         categories = sorted(display_df["category"].dropna().unique())
         tabs = st.tabs(["すべて (전체)"] + categories)
 
@@ -316,9 +312,9 @@ if not df.empty:
         for cat in categories:
             tab_data[cat] = display_df[display_df["category"] == cat]
 
-        edited_dfs = []
+        # 💡 FIX: 전체 데이터 병합이 아닌, "변경된 로우(Rows)"만 담을 리스트
+        all_changed_rows = []
 
-        # 탭 순회 렌더링
         for i, tab in enumerate(tabs):
             with tab:
                 tab_name = list(tab_data.keys())[i]
@@ -334,7 +330,7 @@ if not df.empty:
                     column_config={
                         "id": None,
                         "状態": st.column_config.TextColumn("状態", disabled=True),
-                        "category": None, # 탭으로 구분하므로 표에서는 생략
+                        "category": None, 
                         "item_name": st.column_config.TextColumn("品目名", disabled=True),
                         "current_stock": st.column_config.NumberColumn("現在の在庫", disabled=False, min_value=0, step=1),
                         "min_stock": st.column_config.NumberColumn("最小", disabled=True),
@@ -346,58 +342,58 @@ if not df.empty:
                     hide_index=True,
                     use_container_width=True
                 )
-                edited_dfs.append(edited_tab_df)
+                
+                # 💡 FIX: 각 탭 내부에서 원본과 수정본을 즉시 비교하여 변경된 데이터만 추출
+                merged_tab = current_tab_df.merge(
+                    edited_tab_df[["id", "current_stock"]], 
+                    on="id", 
+                    suffixes=("_old", "_new")
+                )
+                tab_changes = merged_tab[merged_tab["current_stock_old"] != merged_tab["current_stock_new"]].copy()
+                
+                if not tab_changes.empty:
+                    all_changed_rows.append(tab_changes)
 
-        # 병합 및 변경점 추출
-      # (앞부분 탭 렌더링 로직은 동일...)
-        
-        # 병합 및 변경점 추출
-        if edited_dfs:
-            final_edited_df = pd.concat(edited_dfs).drop_duplicates(subset=['id'], keep='last')
-
-            merged = df.merge(
-                final_edited_df[["id", "current_stock"]], 
-                on="id", 
-                suffixes=("_old", "_new")
-            )
-            changed_rows = merged[merged["current_stock_old"] != merged["current_stock_new"]].copy()
-            
-            # 변경 여부 확인 변수
+        # 💡 FIX: 변경된 데이터가 하나라도 있으면 하나로 취합 (중복 편집 방어)
+        if all_changed_rows:
+            changed_rows = pd.concat(all_changed_rows).drop_duplicates(subset=['id'], keep='last')
             has_changes = not changed_rows.empty
+        else:
+            changed_rows = pd.DataFrame()
+            has_changes = False
 
-            # 변경 사항이 있을 때만 프리뷰 표 노출
-            if has_changes:
-                st.warning("⚠️ 以下の変更内容を確認の上、最終承認してください。 (아래 변경 사항을 확인 후 승인해 주세요.)")
-                
-                preview_df = changed_rows[["item_name", "current_stock_old", "current_stock_new", "unit"]].copy()
-                preview_df["増減"] = preview_df["current_stock_new"] - preview_df["current_stock_old"]
-                preview_df.rename(columns={
-                    "item_name": "品目名", 
-                    "current_stock_old": "変更前", 
-                    "current_stock_new": "変更後"
-                }, inplace=True)
-                
-                st.dataframe(preview_df[["品目名", "変更前", "増減", "変更後", "unit"]], hide_index=True, use_container_width=True)
-
-            # 💡 버튼은 항상 노출하되, 변경 사항이 없으면 disabled=True 로 비활성화
-            if st.button("✅ 変更の最終承認とDB反映 (변경 승인 및 저장)", type="primary", use_container_width=True, disabled=not has_changes):
-                try:
-                    with st.spinner('データ更新中...'):
-                        count = process_inventory_changes(changed_rows, user)
-                        
-                    if count > 0:
-                        st.success(f"{count}個の品目の在庫が正常に更新されました。")
-                        st.cache_data.clear()
-                        time.sleep(1)
-                        st.rerun()
-                        
-                except Exception as e:
-                    st.error(f"保存中にエラーが発生しました: {e}")
+        # --- Safe Guard UI ---
+        if has_changes:
+            st.warning("⚠️ 以下の変更内容を確認の上、最終承認してください。 (아래 변경 사항을 확인 후 승인해 주세요.)")
             
-            # 버튼이 비활성화 상태일 때 안내 문구 출력
-            if not has_changes:
-                st.caption("※ 表の数字を変更すると、上の保存ボタンが押せるようになります。 (표의 숫자를 변경하면 저장 버튼이 활성화됩니다.)")
+            preview_df = changed_rows[["item_name", "current_stock_old", "current_stock_new", "unit"]].copy()
+            preview_df["増減"] = preview_df["current_stock_new"] - preview_df["current_stock_old"]
+            preview_df.rename(columns={
+                "item_name": "品目名", 
+                "current_stock_old": "変更前", 
+                "current_stock_new": "変更後"
+            }, inplace=True)
+            
+            st.dataframe(preview_df[["品目名", "変更前", "増減", "変更後", "unit"]], hide_index=True, use_container_width=True)
+
+        # 저장 버튼
+        if st.button("✅ 変更の最終承認とDB反映 (변경 승인 및 저장)", type="primary", use_container_width=True, disabled=not has_changes):
+            try:
+                with st.spinner('データ更新中...'):
+                    count = process_inventory_changes(changed_rows, user)
+                    
+                if count > 0:
+                    st.success(f"{count}個の品目の在庫が正常に更新されました。")
+                    st.cache_data.clear()
+                    time.sleep(1)
+                    st.rerun()
+                    
+            except Exception as e:
+                st.error(f"保存中にエラーが発生しました: {e}")
                 
+        if not has_changes:
+            st.caption("※ 表の数字を変更すると、上の保存ボタンが押せるようになります。 (표의 숫자를 변경하면 저장 버튼이 활성화됩니다.)")
+
 else:
     st.info("データがありません。新規品目を登録してください。")
 
