@@ -12,7 +12,7 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-BOT_SERVER_URL = "http://localhost:5000/send_alert"
+BOT_SERVER_URL = "https://coffee-stock-n3qfj7sgpn2iemxvpegv4y.streamlit.app/send_alert"
 
 def send_discord_message(content):
     """通知送信機能"""
