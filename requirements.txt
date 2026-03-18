@@ -1,4 +1,6 @@
 streamlit
 pandas
-supabase
 requests
+supabase
+discord.py
+flask
