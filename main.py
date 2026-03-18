@@ -20,70 +20,70 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (탭 바 외 하이라이트 완전 제거)
+# 1. UI 디자인 (딥 네이비 배경 + 상단 탭 하이라이트)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 1. 전체 앱 배경색 (완전한 블랙) */
+        /* 1. 전체 앱 배경색 (세련된 딥 네이비) */
         .stApp {
-            background-color: #000000 !important;
-            color: #ffffff !important;
+            background-color: #0f172a !important; 
+            color: #f1f5f9 !important;
         }
 
-        /* 2. 탭 컨테이너 하얀 박스 제거 */
+        /* 2. 하얀 박스 완벽 제거 및 투명화 */
         .stTabs, [data-baseweb="tabs"] {
             background-color: transparent !important;
         }
 
-        /* 3. 상단 탭 바 (이 부분만 하이라이트 유지) */
+        /* 3. 상단 탭 바 (이 박스 3개 영역만 하이라이트) */
         .stTabs [data-baseweb="tab-list"] {
             gap: 12px;
-            background-color: #111111 !important;
+            background-color: #1e293b !important; /* 짙은 회남색 */
             padding: 12px;
             border-radius: 14px;
-            border: 1px solid #444444; /* 탭 바 외부 실버 테두리 */
+            border: 1px solid #334155; /* 부드러운 외곽 하이라이트 */
             margin-bottom: 25px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
         }
 
-        /* 기본 탭 버튼 */
+        /* 기본 탭 버튼 스타일 */
         .stTabs [data-baseweb="tab"] {
             height: 52px;
-            background-color: #222222 !important;
-            color: #888888 !important;
+            background-color: #334155 !important; /* 차콜 그레이 */
+            color: #94a3b8 !important;
             border-radius: 10px !important;
-            border: 1px solid #333333 !important;
+            border: 1px solid #475569 !important;
             padding: 0 24px !important;
             font-weight: 700 !important;
         }
 
-        /* 선택된 활성 탭 (선명한 하이라이트) */
+        /* 선택된 활성 탭 (선명한 파란색 포인트) */
         .stTabs [aria-selected="true"] {
-            background-color: #1a1a1a !important;
+            background-color: #2563eb !important; /* 포인트 블루 */
             color: #ffffff !important;
-            border: 2px solid #cccccc !important; /* 활성 탭 강조 */
-            box-shadow: 0px 0px 15px rgba(255, 255, 255, 0.1);
+            border: 2px solid #60a5fa !important; /* 밝은 하늘색 테두리 하이라이트 */
+            box-shadow: 0px 0px 15px rgba(37, 99, 235, 0.4);
         }
 
-        /* 4. ★나머지 모든 요소 하이라이트/테두리 삭제★ */
+        /* 4. 나머지 요소들 (배경과 동화되도록 테두리 삭제) */
         [data-testid="stExpander"], div[data-testid="stVerticalBlock"], .stTable {
-            background-color: transparent !important; /* 배경 투명 */
-            border: none !important; /* 테두리 삭제 */
-            box-shadow: none !important; /* 그림자 삭제 */
-            padding: 0 !important;
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
         }
         
-        /* 입력창 및 선택창은 기능상 최소한의 구분만 유지 */
+        /* 입력창 디자인만 최소한으로 유지 */
         input, select, .stNumberInput div { 
-            background-color: #111111 !important; 
+            background-color: #1e293b !important; 
             color: white !important; 
-            border: 1px solid #222222 !important; /* 아주 어두운 테두리 */
+            border: 1px solid #334155 !important;
         }
 
-        /* 구분선 및 텍스트 색상 */
-        .stCaption { color: #888888 !important; }
-        hr { border-top: 1px solid #222222 !important; }
-        h1, h2, h3 { color: #ffffff !important; }
+        /* 텍스트 색상 최적화 */
+        .stCaption { color: #94a3b8 !important; }
+        hr { border-top: 1px solid #334155 !important; }
+        h1, h2, h3 { color: #f8fafc !important; }
 
         #MainMenu, footer {visibility: hidden;}
         .block-container { padding-top: 2rem !important; }
@@ -91,7 +91,7 @@ def inject_custom_css():
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 및 데이터 관리
+# 2. 로직 및 데이터 관리 (기존과 동일)
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -124,7 +124,7 @@ def save_changes():
     st.session_state.edits = {}
     if "inventory_df" in st.session_state: del st.session_state.inventory_df
     if "logs_df" in st.session_state: del st.session_state.logs_df
-    st.success("保存完了！")
+    st.success("保存 완료!")
     time.sleep(1)
     st.rerun()
 
@@ -143,7 +143,7 @@ def main():
         c1, c2 = st.columns([5, 5], vertical_alignment="bottom")
         cats = ["すべて"] + sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["すべて"]
         selected_cat = c1.selectbox("カテゴリ表示:", options=cats)
-        if c2.button("✅ 変更を確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
+        if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
             save_changes()
 
         st.markdown("<br>", unsafe_allow_html=True)
