@@ -25,65 +25,73 @@ def send_discord_message(content):
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 1. 전체 앱 배경색 (세련된 딥 네이비) */
+        /* 1. 전체 앱 배경색 (딥 네이비) */
         .stApp {
             background-color: #0f172a !important; 
             color: #f1f5f9 !important;
         }
 
-        /* 2. 하얀 박스 완벽 제거 및 투명화 */
+        /* 2. 탭 컨테이너 투명화 */
         .stTabs, [data-baseweb="tabs"] {
             background-color: transparent !important;
         }
 
-        /* 3. 상단 탭 바 (이 박스 3개 영역만 하이라이트) */
+        /* 3. 상단 탭 바 하이라이트 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 12px;
-            background-color: #1e293b !important; /* 짙은 회남색 */
+            background-color: #1e293b !important;
             padding: 12px;
             border-radius: 14px;
-            border: 1px solid #334155; /* 부드러운 외곽 하이라이트 */
+            border: 1px solid #334155;
             margin-bottom: 25px;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
         }
 
-        /* 기본 탭 버튼 스타일 */
-        .stTabs [data-baseweb="tab"] {
-            height: 52px;
-            background-color: #334155 !important; /* 차콜 그레이 */
-            color: #94a3b8 !important;
-            border-radius: 10px !important;
-            border: 1px solid #475569 !important;
-            padding: 0 24px !important;
-            font-weight: 700 !important;
-        }
-
-        /* 선택된 활성 탭 (선명한 파란색 포인트) */
+        /* 선택된 활성 탭 */
         .stTabs [aria-selected="true"] {
-            background-color: #2563eb !important; /* 포인트 블루 */
+            background-color: #2563eb !important;
             color: #ffffff !important;
-            border: 2px solid #60a5fa !important; /* 밝은 하늘색 테두리 하이라이트 */
+            border: 2px solid #60a5fa !important;
             box-shadow: 0px 0px 15px rgba(37, 99, 235, 0.4);
         }
 
-        /* 4. 나머지 요소들 (배경과 동화되도록 테두리 삭제) */
+        /* 4. ★수량 조절(-, +) 버튼 및 입력칸 너비 확장★ */
+        /* 스팀릿의 기본 넘버 인풋 위젯의 너비를 강제로 늘립니다 */
+        div[data-testid="stNumberInput"] {
+            width: 160px !important; /* 기존보다 양옆으로 더 늘림 */
+            margin-left: auto; /* 오른쪽 정렬 유지 */
+        }
+
+        /* 버튼 내부의 텍스트와 아이콘 크기 조정 */
+        div[data-testid="stNumberInput"] button {
+            background-color: #334155 !important;
+            color: white !important;
+            border-radius: 8px !important;
+            width: 45px !important; /* 버튼 자체의 가로 길이 확대 */
+            height: 40px !important;
+        }
+
+        /* 숫자가 적히는 중앙 칸 디자인 */
+        div[data-testid="stNumberInput"] input {
+            background-color: #0f172a !important;
+            color: #ffffff !important;
+            font-size: 1.3rem !important; /* 숫자 크기 확대 */
+            font-weight: bold !important;
+        }
+
+        /* 5. 나머지 요소들 디자인 */
         [data-testid="stExpander"], div[data-testid="stVerticalBlock"], .stTable {
             background-color: transparent !important;
             border: none !important;
-            box-shadow: none !important;
         }
         
-        /* 입력창 디자인만 최소한으로 유지 */
-        input, select, .stNumberInput div { 
+        input, select { 
             background-color: #1e293b !important; 
             color: white !important; 
             border: 1px solid #334155 !important;
         }
 
-        /* 텍스트 색상 최적화 */
         .stCaption { color: #94a3b8 !important; }
         hr { border-top: 1px solid #334155 !important; }
-        h1, h2, h3 { color: #f8fafc !important; }
 
         #MainMenu, footer {visibility: hidden;}
         .block-container { padding-top: 2rem !important; }
