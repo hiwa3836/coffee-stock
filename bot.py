@@ -1,23 +1,34 @@
 import discord
 from discord.ext import commands
-import os
+from supabase import create_client, Client
 from flask import Flask
 import threading
+import os
+import asyncio
 
-# 1. Flask 설정 (Render의 'Web Service' 체크 통과용)
+# --- 1. 보안 설정 ---
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+TOKEN = os.environ.get("DISCORD_TOKEN")
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 1483110205184278679))
+
+# DB 연결
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# --- 2. Flask 서버 (Render 포트 체크 통과용) ---
 app = Flask(__name__)
 
 @app.route('/')
-def home():
-    return "I am Alive!", 200
+def health_check():
+    # Render가 이 주소로 접속했을 때 200 OK를 던져줘야 'Live'가 됩니다.
+    return "Bot is Online!", 200
 
 def run_flask():
-    # Render가 주는 포트를 최우선으로 사용
-    port = int(os.environ.get("PORT", 5000))
+    # Render는 자동으로 PORT 환경 변수를 부여합니다.
+    port = int(os.environ.get("PORT", 10000)) 
     app.run(host='0.0.0.0', port=port)
 
-# 2. 디스코드 봇 설정
-TOKEN = os.environ.get("DISCORD_TOKEN")
+# --- 3. Discord 봇 설정 ---
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -26,15 +37,19 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 async def on_ready():
     print(f'✅ 봇 온라인: {bot.user}')
 
-# (기존 !在庫, !不足 커맨드들은 여기에 그대로 유지하세요)
+# 여기에 !在庫, !不足 커맨드들은 그대로 두세요.
 
-# 3. 실행부 (순서 변경: Flask 먼저 실행)
+# --- 4. 실행부 (가장 중요) ---
 if __name__ == "__main__":
-    # Flask 서버를 백그라운드에서 먼저 실행 (Render 체크 통과용)
-    threading.Thread(target=run_flask, daemon=True).start()
+    # Flask를 먼저 실행해서 Render의 포트 스캔을 통과시킵니다.
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
     
-    # 그 다음 봇 실행
+    # 그 다음 디스코드 봇 로그인
     if TOKEN:
-        bot.run(TOKEN)
+        try:
+            bot.run(TOKEN)
+        except Exception as e:
+            print(f"❌ 봇 실행 에러: {e}")
     else:
-        print("❌ DISCORD_TOKEN을 찾을 수 없습니다!")
+        print("❌ DISCORD_TOKEN이 없습니다.")
