@@ -20,62 +20,69 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (다크 모드 + 하얀 배경 제거 + 하이라이트)
+# 1. UI 디자인 (올 블랙 + 하얀 배경 제거 + 실버 하이라이트)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 1. 전체 앱 배경색 (어두운 배경) */
+        /* 1. 전체 앱 배경색 (완전한 블랙) */
         .stApp {
-            background-color: #0f172a !important;
-            color: #f1f5f9 !important;
+            background-color: #000000 !important;
+            color: #ffffff !important;
         }
 
-        /* 2. 문제의 하얀 배경 컨테이너를 투명하게 제거 */
-        .stTabs, [data-baseweb="tabs"] {
+        /* 2. 탭 컨테이너 투명화 (하얀 박스 제거) */
+        .stTabs, [data-baseweb="tabs"], [data-testid="stExpander"] {
             background-color: transparent !important;
         }
 
         /* 3. 탭 버튼들을 감싸는 바닥(선택창 외부) 디자인 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 12px;
-            background-color: #1e293b !important; /* 어두운 회색 */
+            background-color: #111111 !important; /* 매우 진한 회색 */
             padding: 12px;
             border-radius: 14px;
-            border: 1px solid #334155; /* 하이라이트 경계선 */
-            margin-bottom: 20px;
+            border: 1px solid #444444; /* 실버/그레이 하이라이트 경계선 */
+            margin-bottom: 25px;
         }
 
         /* 4. 선택되지 않은 기본 탭 버튼 */
         .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            background-color: #334155 !important;
-            color: #94a3b8 !important;
+            height: 52px;
+            background-color: #222222 !important;
+            color: #888888 !important;
             border-radius: 10px !important;
-            border: 1px solid #475569 !important;
+            border: 1px solid #333333 !important;
             padding: 0 24px !important;
             font-weight: 700 !important;
         }
 
-        /* 5. ★선택된 활성 탭★ 디자인 (파란색 + 밝은 테두리) */
+        /* 5. ★선택된 활성 탭★ 디자인 (딥 블루 포인트 + 밝은 실버 테두리) */
         .stTabs [aria-selected="true"] {
-            background-color: #2563eb !important;
+            background-color: #1a1a1a !important;
             color: #ffffff !important;
-            border: 2px solid #60a5fa !important; /* 밝은 테두리 하이라이트 */
-            box-shadow: 0px 4px 15px rgba(37, 99, 235, 0.4);
+            border: 2px solid #cccccc !important; /* 선명한 실버 하이라이트 */
+            box-shadow: 0px 0px 15px rgba(255, 255, 255, 0.1);
         }
 
-        /* 6. 내부 섹션 배경 다크화 */
+        /* 6. 내부 섹션 및 카드 배경 블랙화 */
         [data-testid="stExpander"], div[data-testid="stVerticalBlock"] {
-            background-color: #1e293b;
+            background-color: #0a0a0a;
             border-radius: 12px;
-            border: 1px solid #334155;
+            border: 1px solid #222222;
         }
         
-        /* 글씨 및 구분선 색상 */
-        .stCaption { color: #94a3b8 !important; }
-        hr { border-top: 1px solid #334155 !important; }
-        input, select, .stNumberInput div { background-color: #0f172a !important; color: white !important; }
+        /* 텍스트 및 입력창 색상 조정 */
+        .stCaption { color: #aaaaaa !important; }
+        hr { border-top: 1px solid #222222 !important; }
+        input, select, .stNumberInput div { 
+            background-color: #111111 !important; 
+            color: white !important; 
+            border: 1px solid #333333 !important;
+        }
+
+        /* 메인 타이틀 색상 */
+        h1 { color: #ffffff !important; font-weight: 800; }
 
         #MainMenu, footer {visibility: hidden;}
         .block-container { padding-top: 2rem !important; }
@@ -83,7 +90,7 @@ def inject_custom_css():
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 및 데이터 관리 (기본 로직 유지)
+# 2. 로직 및 데이터 관리 (동일)
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -121,7 +128,7 @@ def save_changes():
     st.rerun()
 
 # ==========================================
-# 3. 메인 화면 UI
+# 3. 메인 UI
 # ==========================================
 def main():
     st.set_page_config(page_title="RCS在庫管理", layout="centered")
@@ -149,7 +156,7 @@ def main():
             col1, col2 = st.columns([6, 4], vertical_alignment="center")
             with col1:
                 st.markdown(f"**{icon} {row['item_name']}**")
-                st.caption(f"현재: {row['current_stock']} / 기준: {row['min_stock']} {row['unit']}")
+                st.caption(f"現在: {row['current_stock']} / 目安: {row['min_stock']} {row['unit']}")
             with col2:
                 st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
             st.markdown("<hr style='margin:0; opacity:0.1;'>", unsafe_allow_html=True)
@@ -177,7 +184,7 @@ def main():
     with tab3:
         st.subheader("⚙️ マスタ管理")
         with st.expander("➕ 新規アイテム登録"):
-            n_name = st.text_input("商品명")
+            n_name = st.text_input("商品名")
             ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["커피"]
             n_cat_s = st.selectbox("カテゴリ", options=ex_cats + ["(新規作成)"])
             f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名")
