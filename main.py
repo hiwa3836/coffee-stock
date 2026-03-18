@@ -20,51 +20,70 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (기본 배경 + 탭 하이라이트)
+# 1. UI 디자인 (다크 모드 + 하얀 배경 제거 + 하이라이트)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 배경색을 시스템 기본(흰색/밝은색)으로 복구 */
-        .stApp { background-color: transparent !important; }
+        /* 1. 전체 앱 배경색 (어두운 배경) */
+        .stApp {
+            background-color: #0f172a !important;
+            color: #f1f5f9 !important;
+        }
 
-        /* 탭 바 디자인 */
+        /* 2. 문제의 하얀 배경 컨테이너를 투명하게 제거 */
+        .stTabs, [data-baseweb="tabs"] {
+            background-color: transparent !important;
+        }
+
+        /* 3. 탭 버튼들을 감싸는 바닥(선택창 외부) 디자인 */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 10px;
-            background-color: #f1f5f9;
-            padding: 10px;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
+            gap: 12px;
+            background-color: #1e293b !important; /* 어두운 회색 */
+            padding: 12px;
+            border-radius: 14px;
+            border: 1px solid #334155; /* 하이라이트 경계선 */
+            margin-bottom: 20px;
         }
 
-        /* 기본 탭 버튼 */
+        /* 4. 선택되지 않은 기본 탭 버튼 */
         .stTabs [data-baseweb="tab"] {
-            height: 48px;
-            background-color: #f8fafc !important;
-            color: #64748b !important;
-            border-radius: 8px !important;
-            border: 1px solid #e2e8f0 !important;
-            padding: 0 20px !important;
-            font-weight: 600 !important;
+            height: 50px;
+            background-color: #334155 !important;
+            color: #94a3b8 !important;
+            border-radius: 10px !important;
+            border: 1px solid #475569 !important;
+            padding: 0 24px !important;
+            font-weight: 700 !important;
         }
 
-        /* ★선택된 탭 하이라이트★ (밝은 배경에 맞춰 강조) */
+        /* 5. ★선택된 활성 탭★ 디자인 (파란색 + 밝은 테두리) */
         .stTabs [aria-selected="true"] {
-            background-color: #1e293b !important; /* 진한 회색 */
+            background-color: #2563eb !important;
             color: #ffffff !important;
-            border: 2px solid #94a3b8 !important;
-            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+            border: 2px solid #60a5fa !important; /* 밝은 테두리 하이라이트 */
+            box-shadow: 0px 4px 15px rgba(37, 99, 235, 0.4);
         }
 
-        /* 하단 바 제거 및 여백 조절 */
+        /* 6. 내부 섹션 배경 다크화 */
+        [data-testid="stExpander"], div[data-testid="stVerticalBlock"] {
+            background-color: #1e293b;
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+        
+        /* 글씨 및 구분선 색상 */
+        .stCaption { color: #94a3b8 !important; }
+        hr { border-top: 1px solid #334155 !important; }
+        input, select, .stNumberInput div { background-color: #0f172a !important; color: white !important; }
+
         #MainMenu, footer {visibility: hidden;}
         .block-container { padding-top: 2rem !important; }
-        input[type="number"] { text-align: center; font-size: 1.1rem; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 및 데이터 관리
+# 2. 로직 및 데이터 관리 (기본 로직 유지)
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -113,7 +132,6 @@ def main():
     tab1, tab2, tab3 = st.tabs(["📝 在庫更新", "📜 変更履歴", "⚙️ 管理設定"])
 
     with tab1:
-        # 카테고리 50% | 저장 버튼 50%
         c1, c2 = st.columns([5, 5], vertical_alignment="bottom")
         cats = ["すべて"] + sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["すべて"]
         selected_cat = c1.selectbox("カテゴリ表示:", options=cats)
@@ -131,7 +149,7 @@ def main():
             col1, col2 = st.columns([6, 4], vertical_alignment="center")
             with col1:
                 st.markdown(f"**{icon} {row['item_name']}**")
-                st.caption(f"現在: {row['current_stock']} / 目安: {row['min_stock']} {row['unit']}")
+                st.caption(f"현재: {row['current_stock']} / 기준: {row['min_stock']} {row['unit']}")
             with col2:
                 st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
             st.markdown("<hr style='margin:0; opacity:0.1;'>", unsafe_allow_html=True)
