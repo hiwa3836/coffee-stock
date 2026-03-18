@@ -20,7 +20,7 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (올 블랙 + 하얀 배경 제거 + 실버 하이라이트)
+# 1. UI 디자인 (탭 바 외 하이라이트 완전 제거)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
@@ -31,22 +31,22 @@ def inject_custom_css():
             color: #ffffff !important;
         }
 
-        /* 2. 탭 컨테이너 투명화 (하얀 박스 제거) */
-        .stTabs, [data-baseweb="tabs"], [data-testid="stExpander"] {
+        /* 2. 탭 컨테이너 하얀 박스 제거 */
+        .stTabs, [data-baseweb="tabs"] {
             background-color: transparent !important;
         }
 
-        /* 3. 탭 버튼들을 감싸는 바닥(선택창 외부) 디자인 */
+        /* 3. 상단 탭 바 (이 부분만 하이라이트 유지) */
         .stTabs [data-baseweb="tab-list"] {
             gap: 12px;
-            background-color: #111111 !important; /* 매우 진한 회색 */
+            background-color: #111111 !important;
             padding: 12px;
             border-radius: 14px;
-            border: 1px solid #444444; /* 실버/그레이 하이라이트 경계선 */
+            border: 1px solid #444444; /* 탭 바 외부 실버 테두리 */
             margin-bottom: 25px;
         }
 
-        /* 4. 선택되지 않은 기본 탭 버튼 */
+        /* 기본 탭 버튼 */
         .stTabs [data-baseweb="tab"] {
             height: 52px;
             background-color: #222222 !important;
@@ -57,32 +57,33 @@ def inject_custom_css():
             font-weight: 700 !important;
         }
 
-        /* 5. ★선택된 활성 탭★ 디자인 (딥 블루 포인트 + 밝은 실버 테두리) */
+        /* 선택된 활성 탭 (선명한 하이라이트) */
         .stTabs [aria-selected="true"] {
             background-color: #1a1a1a !important;
             color: #ffffff !important;
-            border: 2px solid #cccccc !important; /* 선명한 실버 하이라이트 */
+            border: 2px solid #cccccc !important; /* 활성 탭 강조 */
             box-shadow: 0px 0px 15px rgba(255, 255, 255, 0.1);
         }
 
-        /* 6. 내부 섹션 및 카드 배경 블랙화 */
-        [data-testid="stExpander"], div[data-testid="stVerticalBlock"] {
-            background-color: #0a0a0a;
-            border-radius: 12px;
-            border: 1px solid #222222;
+        /* 4. ★나머지 모든 요소 하이라이트/테두리 삭제★ */
+        [data-testid="stExpander"], div[data-testid="stVerticalBlock"], .stTable {
+            background-color: transparent !important; /* 배경 투명 */
+            border: none !important; /* 테두리 삭제 */
+            box-shadow: none !important; /* 그림자 삭제 */
+            padding: 0 !important;
         }
         
-        /* 텍스트 및 입력창 색상 조정 */
-        .stCaption { color: #aaaaaa !important; }
-        hr { border-top: 1px solid #222222 !important; }
+        /* 입력창 및 선택창은 기능상 최소한의 구분만 유지 */
         input, select, .stNumberInput div { 
             background-color: #111111 !important; 
             color: white !important; 
-            border: 1px solid #333333 !important;
+            border: 1px solid #222222 !important; /* 아주 어두운 테두리 */
         }
 
-        /* 메인 타이틀 색상 */
-        h1 { color: #ffffff !important; font-weight: 800; }
+        /* 구분선 및 텍스트 색상 */
+        .stCaption { color: #888888 !important; }
+        hr { border-top: 1px solid #222222 !important; }
+        h1, h2, h3 { color: #ffffff !important; }
 
         #MainMenu, footer {visibility: hidden;}
         .block-container { padding-top: 2rem !important; }
@@ -90,7 +91,7 @@ def inject_custom_css():
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 및 데이터 관리 (동일)
+# 2. 로직 및 데이터 관리
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
