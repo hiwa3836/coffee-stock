@@ -8,12 +8,10 @@ from supabase import create_client, Client
 # ==========================================
 # ⚙️ システム設定 (Supabase & Bot Server)
 # ==========================================
-# StreamlitのSecretsから環境変数を読み込み
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# RenderでデプロイしたBotサーバーのURL
 BOT_SERVER_URL = "https://coffee-stock.onrender.com/send_alert"
 
 def send_discord_message(content):
@@ -21,7 +19,6 @@ def send_discord_message(content):
     try:
         requests.post(BOT_SERVER_URL, json={"message": content}, timeout=3)
     except Exception:
-        # サーバーオフライン時もアプリ自体は止めない
         st.toast("⚠️ Discord通知に失敗しました（サーバー応答なし）")
         pass
 
@@ -31,7 +28,6 @@ def send_discord_message(content):
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 下部の固定保存バー */
         .sticky-bottom-bar {
             position: fixed; bottom: 0; left: 0; width: 100%;
             background-color: rgba(255, 255, 255, 0.98);
@@ -39,14 +35,9 @@ def inject_custom_css():
             box-shadow: 0px -5px 15px rgba(0, 0, 0, 0.1);
             z-index: 99999; border-top: 1px solid #e2e8f0;
         }
-        /* ヘッダー・フッターの非表示 */
         #MainMenu, footer {visibility: hidden;}
         .block-container { padding-bottom: 130px !important; padding-top: 1.5rem !important; }
-        
-        /* 入力エリアの強調 */
         input[type="number"] { text-align: center; font-size: 1.2rem; font-weight: bold; }
-        
-        /* タブのスタイル */
         .stTabs [data-baseweb="tab-list"] { gap: 10px; }
         .stTabs [data-baseweb="tab"] {
             background-color: #f8fafc; border-radius: 5px 5px 0 0; padding: 10px 20px;
@@ -58,23 +49,22 @@ def inject_custom_css():
 # 2. データ初期化
 # ==========================================
 def init_state():
-    # 在庫データの読み込み
     if "inventory_df" not in st.session_state:
         res = supabase.table("inventory").select("*").order("id").execute()
         st.session_state.inventory_df = pd.DataFrame(res.data) if res.data else pd.DataFrame()
     
-    # 編集中の変更を一時保存
     if "edits" not in st.session_state: st.session_state.edits = {}
     
-    # 最新75件（15件×5ページ）の履歴をDBから取得
     if "logs_df" not in st.session_state:
+        # DBから最新75件取得
         res_logs = supabase.table("inventory_logs").select("*").order("created_at", desc=True).limit(75).execute()
         st.session_state.logs_df = pd.DataFrame(res_logs.data) if res_logs.data else pd.DataFrame()
 
     if "log_page" not in st.session_state: st.session_state.log_page = 1
 
 def on_stock_change(item_id):
-    st.session_state.edits[item_id] = st.session_state[f"input_{item_id}"]
+    # numpyの型が混入しないよう明示的にintに変換
+    st.session_state.edits[item_id] = int(st.session_state[f"input_{item_id}"])
 
 # ==========================================
 # 3. メイン画面 UI
@@ -87,14 +77,11 @@ def main():
     st.title("📦 RCS在庫管理システム")
     tab1, tab2, tab3 = st.tabs(["📝 在庫更新", "📜 変更履歴", "⚙️ 管理設定"])
 
-    # --- TAB 1: 在庫更新 (メイン機能) ---
+    # --- TAB 1: 在庫更新 ---
     with tab1:
         st.markdown("##### 現在の実在庫数を入力してください")
-        
-        # カテゴリ絞り込み
         categories = ["すべて"] + st.session_state.inventory_df["category"].unique().tolist() if not st.session_state.inventory_df.empty else ["すべて"]
         selected_cat = st.selectbox("カテゴリ表示:", options=categories)
-        
         st.divider()
 
         df = st.session_state.inventory_df
@@ -106,8 +93,6 @@ def main():
             for _, row in df.iterrows():
                 item_id = row["id"]
                 val = st.session_state.edits.get(item_id, row["current_stock"])
-                
-                # 在庫状況によるアイコン変更
                 status_icon = "🔴" if val <= row["min_stock"] else "🟢"
                 
                 col1, col2 = st.columns([6, 4], vertical_alignment="center")
@@ -119,7 +104,6 @@ def main():
                                     key=f"input_{item_id}", label_visibility="collapsed", 
                                     on_change=on_stock_change, args=(item_id,))
 
-        # 保存用フローティングバー
         if st.session_state.edits:
             st.markdown('<div class="sticky-bottom-bar">', unsafe_allow_html=True)
             c1, c2 = st.columns([1, 2], vertical_alignment="center")
@@ -130,31 +114,28 @@ def main():
                 
                 for i_id, n_val in st.session_state.edits.items():
                     item = st.session_state.inventory_df[st.session_state.inventory_df["id"] == i_id].iloc[0]
-                    diff = n_val - item["current_stock"]
+                    diff = int(n_val) - int(item["current_stock"])
                     
                     if diff != 0:
-                        # 1. 在庫テーブル更新
-                        supabase.table("inventory").update({"current_stock": n_val}).eq("id", i_id).execute()
+                        # 1. 在庫更新
+                        supabase.table("inventory").update({"current_stock": int(n_val)}).eq("id", i_id).execute()
                         
-                        # 2. 履歴テーブルに記録
+                        # 2. 履歴記録 (✅ JSONエラー回避のため明示的にint型へ変換)
                         log_entry = {
-                            "item_name": item["item_name"],
-                            "before_qty": item["current_stock"],
-                            "after_qty": n_val,
-                            "diff_qty": diff,
+                            "item_name": str(item["item_name"]),
+                            "before_qty": int(item["current_stock"]),
+                            "after_qty": int(n_val),
+                            "diff_qty": int(diff),
                             "created_at": now
                         }
                         supabase.table("inventory_logs").insert(log_entry).execute()
                         
-                        # Discordメッセージ構築
                         diff_str = f"+{diff}" if diff > 0 else f"{diff}"
                         discord_msg += f"> **{item['item_name']}**: {item['current_stock']} → **{n_val}** ({diff_str})\n"
                 
-                # 通知送信
                 send_discord_message(discord_msg)
-                
-                # 状態リセット
                 st.session_state.edits = {}
+                # データを再読み込みさせるために状態を削除
                 if "inventory_df" in st.session_state: del st.session_state.inventory_df
                 if "logs_df" in st.session_state: del st.session_state.logs_df
                 
@@ -163,11 +144,10 @@ def main():
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- TAB 2: 変更履歴 (15件×5ページ) ---
+    # --- TAB 2: 変更履歴 ---
     with tab2:
         st.subheader("📜 在庫変動履歴 (最新75件)")
         logs = st.session_state.logs_df
-        
         if logs.empty:
             st.info("履歴データがありません。")
         else:
@@ -182,20 +162,11 @@ def main():
             for _, row in paged_logs.iterrows():
                 l1, l2 = st.columns([6, 4])
                 l1.markdown(f"**{row['item_name']}**<br><small style='color:gray;'>{row['created_at']}</small>", unsafe_allow_html=True)
-                
                 diff = row['diff_qty']
                 color = "#ef4444" if diff < 0 else "#10b981"
-                diff_text = f"+{diff}" if diff > 0 else f"{diff}"
-                
-                l2.markdown(f"""
-                <div style='text-align:right;'>
-                    <small>{row['before_qty']} → {row['after_qty']}</small><br>
-                    <b style='color:{color}; font-size:1.1rem;'>{diff_text}</b>
-                </div>
-                """, unsafe_allow_html=True)
+                l2.markdown(f"<div style='text-align:right;'><small>{row['before_qty']} → {row['after_qty']}</small><br><b style='color:{color}; font-size:1.1rem;'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
                 st.divider()
 
-            # ページネーション
             p1, p2, p3 = st.columns([1, 1, 1])
             if p1.button("⬅️ 前へ", disabled=st.session_state.log_page == 1):
                 st.session_state.log_page -= 1
@@ -205,21 +176,18 @@ def main():
                 st.session_state.log_page += 1
                 st.rerun()
 
-    # --- TAB 3: 管理設定 (マスターデータ) ---
+    # --- TAB 3: 管理設定 ---
     with tab3:
         st.subheader("⚙️ マスタ管理")
-        st.info("アイテムの追加・削除・発注目安の設定が可能です。")
-        
-        # アイテム追加（簡易版）
         with st.expander("➕ 新規アイテムの登録"):
             new_name = st.text_input("商品名")
             new_cat = st.selectbox("カテゴリ", ["コーヒー豆", "消耗品", "シロップ", "その他"])
-            new_min = st.number_input("発注目安 (この数以下で警告)", min_value=0)
-            new_unit = st.text_input("単位 (例: 袋, 個, kg)", value="個")
+            new_min = st.number_input("発注目安", min_value=0)
+            new_unit = st.text_input("単位", value="個")
             if st.button("登録を実行", type="primary"):
                 supabase.table("inventory").insert({
                     "item_name": new_name, "category": new_cat, 
-                    "min_stock": new_min, "unit": new_unit, "current_stock": 0
+                    "min_stock": int(new_min), "unit": new_unit, "current_stock": 0
                 }).execute()
                 st.success("登録完了しました。")
                 time.sleep(0.5)
