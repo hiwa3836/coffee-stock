@@ -20,46 +20,51 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (다크모드 + 하이라이트 탭)
+# 1. UI 디자인 (기본 배경 + 탭 하이라이트)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
-        .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
-        
-        /* 탭 바 컨테이너 */
+        /* 배경색을 시스템 기본(흰색/밝은색)으로 복구 */
+        .stApp { background-color: transparent !important; }
+
+        /* 탭 바 디자인 */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 12px; background-color: #1e293b; padding: 12px; border-radius: 14px;
-            border: 1px solid #334155; margin-bottom: 20px;
+            gap: 10px;
+            background-color: #f1f5f9;
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
         }
 
         /* 기본 탭 버튼 */
         .stTabs [data-baseweb="tab"] {
-            height: 50px; background-color: #334155 !important; color: #94a3b8 !important;
-            border-radius: 10px !important; border: 1px solid #475569 !important;
-            padding: 0 24px !important; font-weight: 700 !important;
+            height: 48px;
+            background-color: #f8fafc !important;
+            color: #64748b !important;
+            border-radius: 8px !important;
+            border: 1px solid #e2e8f0 !important;
+            padding: 0 20px !important;
+            font-weight: 600 !important;
         }
 
-        /* ★선택된 탭 하이라이트★ */
+        /* ★선택된 탭 하이라이트★ (밝은 배경에 맞춰 강조) */
         .stTabs [aria-selected="true"] {
-            background-color: #2563eb !important; color: #ffffff !important;
-            border: 2px solid #60a5fa !important; /* 밝은 회색/하늘색 하이라이트 */
-            box-shadow: 0px 0px 20px rgba(37, 99, 235, 0.5);
+            background-color: #1e293b !important; /* 진한 회색 */
+            color: #ffffff !important;
+            border: 2px solid #94a3b8 !important;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
         }
 
-        /* 입력창 & 섹션 디자인 */
-        [data-testid="stExpander"], div[data-testid="stVerticalBlock"] {
-            background-color: #1e293b; border-radius: 12px; border: 1px solid #334155;
-        }
-        input, select, .stNumberInput div { background-color: #0f172a !important; color: white !important; }
-        .stCaption { color: #94a3b8 !important; }
-        hr { border-top: 1px solid #334155 !important; }
+        /* 하단 바 제거 및 여백 조절 */
         #MainMenu, footer {visibility: hidden;}
+        .block-container { padding-top: 2rem !important; }
+        input[type="number"] { text-align: center; font-size: 1.1rem; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 및 상태 관리
+# 2. 로직 및 데이터 관리
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -97,7 +102,7 @@ def save_changes():
     st.rerun()
 
 # ==========================================
-# 3. 메인 UI
+# 3. 메인 화면 UI
 # ==========================================
 def main():
     st.set_page_config(page_title="RCS在庫管理", layout="centered")
@@ -109,29 +114,27 @@ def main():
 
     with tab1:
         # 카테고리 50% | 저장 버튼 50%
-        c_col1, c_col2 = st.columns([5, 5], vertical_alignment="bottom")
+        c1, c2 = st.columns([5, 5], vertical_alignment="bottom")
         cats = ["すべて"] + sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["すべて"]
-        selected_cat = c_col1.selectbox("カテゴリ表示:", options=cats)
-        if c_col2.button("✅ 変更を確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
+        selected_cat = c1.selectbox("カテゴリ表示:", options=cats)
+        if c2.button("✅ 変更を確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
             save_changes()
 
         st.markdown("<br>", unsafe_allow_html=True)
         df = st.session_state.inventory_df
         if selected_cat != "すべて": df = df[df["category"] == selected_cat]
         
-        if df.empty: st.info("アイテムがありません")
-        else:
-            for _, row in df.iterrows():
-                i_id = row["id"]
-                val = st.session_state.edits.get(i_id, row["current_stock"])
-                icon = "🔴" if val <= row["min_stock"] else "🟢"
-                col1, col2 = st.columns([6, 4], vertical_alignment="center")
-                with col1:
-                    st.markdown(f"**{icon} {row['item_name']}**")
-                    st.caption(f"現在: {row['current_stock']} / 目安: {row['min_stock']} {row['unit']}")
-                with col2:
-                    st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
-                st.markdown("<hr style='margin:0; opacity:0.1;'>", unsafe_allow_html=True)
+        for _, row in df.iterrows():
+            i_id = row["id"]
+            val = st.session_state.edits.get(i_id, row["current_stock"])
+            icon = "🔴" if val <= row["min_stock"] else "🟢"
+            col1, col2 = st.columns([6, 4], vertical_alignment="center")
+            with col1:
+                st.markdown(f"**{icon} {row['item_name']}**")
+                st.caption(f"現在: {row['current_stock']} / 目安: {row['min_stock']} {row['unit']}")
+            with col2:
+                st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
+            st.markdown("<hr style='margin:0; opacity:0.1;'>", unsafe_allow_html=True)
 
     with tab2:
         st.subheader("📜 変動履歴 (最新75件)")
@@ -145,8 +148,8 @@ def main():
             for _, r in p_logs.iterrows():
                 l1, l2 = st.columns([6, 4])
                 l1.markdown(f"**{r['item_name']}**<br><small>{r['created_at']}</small>", unsafe_allow_html=True)
-                df_qty = r['diff_qty']; clr = "#ef4444" if df_qty < 0 else "#10b981"
-                l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']} → {r['after_qty']}</small><br><b style='color:{clr};'>{'+' if df_qty > 0 else ''}{df_qty}</b></div>", unsafe_allow_html=True)
+                diff = r['diff_qty']; clr = "#ef4444" if diff < 0 else "#10b981"
+                l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']} → {r['after_qty']}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
                 st.divider()
             p1, p2, p3 = st.columns([1,1,1])
             if p1.button("⬅️ 前へ"): st.session_state.log_page = max(1, st.session_state.log_page - 1); st.rerun()
@@ -155,20 +158,18 @@ def main():
 
     with tab3:
         st.subheader("⚙️ マスタ管理")
-        # 아이템 추가
         with st.expander("➕ 新規アイテム登録"):
-            n_name = st.text_input("商品名")
-            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["コーヒー"]
+            n_name = st.text_input("商品명")
+            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["커피"]
             n_cat_s = st.selectbox("カテゴリ", options=ex_cats + ["(新規作成)"])
             f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名")
             ca, cb = st.columns(2)
             nm = ca.number_input("目安", min_value=0); nu = cb.text_input("単位", value="個")
-            if st.button("登録", type="primary"):
+            if st.button("登録", type="primary", use_container_width=True):
                 supabase.table("inventory").insert({"item_name": n_name, "category": f_cat, "min_stock": int(nm), "unit": nu, "current_stock": 0}).execute()
                 del st.session_state.inventory_df; st.rerun()
 
         st.divider()
-        # 아이템 수정/삭제 리스트
         if not st.session_state.inventory_df.empty:
             for cat in sorted(st.session_state.inventory_df["category"].unique()):
                 with st.expander(f"📂 {cat}"):
