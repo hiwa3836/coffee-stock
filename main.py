@@ -20,86 +20,57 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (딥 네이비 배경 + 상단 탭 하이라이트)
+# 1. UI 디자인 (딥 네이비 + 버튼 너비 확장)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 1. 전체 앱 배경색 (딥 네이비) */
-        .stApp {
-            background-color: #0f172a !important; 
-            color: #f1f5f9 !important;
-        }
+        /* 1. 전체 배경색 */
+        .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
 
-        /* 2. 탭 컨테이너 투명화 */
-        .stTabs, [data-baseweb="tabs"] {
-            background-color: transparent !important;
-        }
-
-        /* 3. 상단 탭 바 하이라이트 */
+        /* 2. 탭 바 디자인 및 하이라이트 */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 12px;
-            background-color: #1e293b !important;
-            padding: 12px;
-            border-radius: 14px;
-            border: 1px solid #334155;
-            margin-bottom: 25px;
+            gap: 12px; background-color: #1e293b !important; padding: 12px;
+            border-radius: 14px; border: 1px solid #334155; margin-bottom: 25px;
         }
-
-        /* 선택된 활성 탭 */
+        .stTabs [data-baseweb="tab"] {
+            height: 52px; background-color: #334155 !important; color: #94a3b8 !important;
+            border-radius: 10px !important; border: 1px solid #475569 !important;
+            padding: 0 24px !important; font-weight: 700 !important;
+        }
         .stTabs [aria-selected="true"] {
-            background-color: #2563eb !important;
-            color: #ffffff !important;
-            border: 2px solid #60a5fa !important;
-            box-shadow: 0px 0px 15px rgba(37, 99, 235, 0.4);
+            background-color: #2563eb !important; color: #ffffff !important;
+            border: 2px solid #60a5fa !important; box-shadow: 0px 0px 15px rgba(37, 99, 235, 0.4);
         }
 
-        /* 4. ★수량 조절(-, +) 버튼 및 입력칸 너비 확장★ */
-        /* 스팀릿의 기본 넘버 인풋 위젯의 너비를 강제로 늘립니다 */
+        /* 3. ★버튼 너비 양옆으로 시원하게 확장★ */
         div[data-testid="stNumberInput"] {
-            width: 160px !important; /* 기존보다 양옆으로 더 늘림 */
-            margin-left: auto; /* 오른쪽 정렬 유지 */
+            width: 180px !important; /* 전체 너비 확장 */
         }
-
-        /* 버튼 내부의 텍스트와 아이콘 크기 조정 */
         div[data-testid="stNumberInput"] button {
+            width: 50px !important; /* -, + 버튼 가로 길이 대폭 확대 */
+            height: 45px !important;
             background-color: #334155 !important;
             color: white !important;
-            border-radius: 8px !important;
-            width: 45px !important; /* 버튼 자체의 가로 길이 확대 */
-            height: 40px !important;
         }
-
-        /* 숫자가 적히는 중앙 칸 디자인 */
         div[data-testid="stNumberInput"] input {
-            background-color: #0f172a !important;
-            color: #ffffff !important;
-            font-size: 1.3rem !important; /* 숫자 크기 확대 */
+            font-size: 1.4rem !important; /* 숫자 크기 확대 */
             font-weight: bold !important;
         }
 
-        /* 5. 나머지 요소들 디자인 */
-        [data-testid="stExpander"], div[data-testid="stVerticalBlock"], .stTable {
+        /* 4. 불필요한 하얀 박스 및 테두리 제거 */
+        .stTabs, [data-baseweb="tabs"], [data-testid="stExpander"], div[data-testid="stVerticalBlock"] {
             background-color: transparent !important;
             border: none !important;
         }
-        
-        input, select { 
-            background-color: #1e293b !important; 
-            color: white !important; 
-            border: 1px solid #334155 !important;
-        }
-
-        .stCaption { color: #94a3b8 !important; }
+        input, select { background-color: #1e293b !important; color: white !important; border: 1px solid #334155 !important; }
         hr { border-top: 1px solid #334155 !important; }
-
         #MainMenu, footer {visibility: hidden;}
-        .block-container { padding-top: 2rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 및 데이터 관리 (기존과 동일)
+# 2. 로직 및 데이터 관리
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -132,7 +103,7 @@ def save_changes():
     st.session_state.edits = {}
     if "inventory_df" in st.session_state: del st.session_state.inventory_df
     if "logs_df" in st.session_state: del st.session_state.logs_df
-    st.success("保存 완료!")
+    st.success("保存完了！")
     time.sleep(1)
     st.rerun()
 
@@ -162,7 +133,7 @@ def main():
             i_id = row["id"]
             val = st.session_state.edits.get(i_id, row["current_stock"])
             icon = "🔴" if val <= row["min_stock"] else "🟢"
-            col1, col2 = st.columns([6, 4], vertical_alignment="center")
+            col1, col2 = st.columns([5, 5], vertical_alignment="center")
             with col1:
                 st.markdown(f"**{icon} {row['item_name']}**")
                 st.caption(f"現在: {row['current_stock']} / 目安: {row['min_stock']} {row['unit']}")
@@ -191,7 +162,7 @@ def main():
             if p3.button("次へ ➡️"): st.session_state.log_page = min(total_p, st.session_state.log_page + 1); st.rerun()
 
     with tab3:
-        st.subheader("⚙️ マスタ管理")
+        st.subheader("⚙️ 마스타 관리")
         with st.expander("➕ 新規アイテム登録"):
             n_name = st.text_input("商品名")
             ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["커피"]
@@ -222,7 +193,7 @@ def main():
                             if st.button("保存", key=f"s_{rid}", type="primary"):
                                 supabase.table("inventory").update({"item_name": en, "category": ec}).eq("id", rid).execute()
                                 st.session_state[ek] = False; del st.session_state.inventory_df; st.rerun()
-                            if st.button("戻る", key=f"b_{rid}"): st.session_state[ek] = False; st.rerun()
+                            if st.button("戻른", key=f"b_{rid}"): st.session_state[ek] = False; st.rerun()
 
 if __name__ == "__main__":
     main()
