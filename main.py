@@ -185,54 +185,85 @@ def main():
                     i.number_input("数量", value=val, step=0.5, format="%g", key=f"input_{i_id}", label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
                     st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
 
-    # --- TAB 2: 変更履歴 (Excel ダウンロード機能追加) ---
+# --- TAB 2: 変更履歴 (Excel ダウンロード機能追加) ---
     with tab2:
         st.subheader("📜 直近の変更履歴 (最新15件)")
-        logs = st.session_state.logs_df
         
-        if logs.empty: 
-            st.info("表示可能な履歴がありません。")
-        else:
-            # Excel ダウンロードボタンの配置
-            buffer = io.BytesIO()
-            export_df = logs.copy()
+        # 엑셀 다운로드 버튼을 양옆으로 나란히 배치하기 위해 화면을 반으로 나눕니다.
+        col_dl1, col_dl2 = st.columns(2)
+        
+        # ----------------------------------------------------
+        # 1. 왼쪽 버튼: [현재 재고 데이터] 엑셀 다운로드
+        # ----------------------------------------------------
+        inv_df = st.session_state.inventory_df
+        if not inv_df.empty:
+            inv_buffer = io.BytesIO()
+            inv_export = inv_df[['category', 'item_name', 'current_stock', 'min_stock', 'unit']].copy()
             
-# 1. 날짜 변환 (타임존 에러 방지)
-            export_df['created_at'] = pd.to_datetime(
-                export_df['created_at'], 
-                errors='coerce', 
-                utc=True
+            # 컬럼명을 보기 좋은 일본어로 변경
+            inv_export = inv_export.rename(columns={
+                'category': 'カテゴリ',
+                'item_name': '商品名',
+                'current_stock': '現在在庫',
+                'min_stock': '目標値',
+                'unit': '単位'
+            })
+            
+            with pd.ExcelWriter(inv_buffer, engine='openpyxl') as writer:
+                inv_export.to_excel(writer, index=False, sheet_name='現在在庫')
+                
+            with col_dl1:
+                st.download_button(
+                    label="📦 現在の在庫データをDL",  # 현재 재고 다운로드
+                    data=inv_buffer.getvalue(),
+                    file_name=f"Current_Stock_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+
+        # ----------------------------------------------------
+        # 2. 오른쪽 버튼: [과거 변경 이력] 엑셀 다운로드
+        # ----------------------------------------------------
+        logs = st.session_state.logs_df
+        if not logs.empty:
+            log_buffer = io.BytesIO()
+            log_export = logs.copy()
+            
+            # 날짜 포맷 안전하게 변환
+            log_export['created_at'] = pd.to_datetime(
+                log_export['created_at'], errors='coerce', utc=True
             ).dt.strftime('%Y-%m-%d %H:%M:%S')
             
-            # 2. 컬럼명 변경 (오타 없는 정확한 일본어)
-            # 'item_name' -> '商品名' (정확히 일본어 '名'을 사용해야 합니다)
-            export_df = export_df.rename(columns={
+            # 컬럼명을 일본어로 변경
+            log_export = log_export.rename(columns={
                 'created_at': '変更日時',
-                'item_name': '商品名', 
+                'item_name': '商品名',
                 'before_qty': '変更前',
                 'after_qty': '変更後',
                 'diff_qty': '変動量'
             })
+            log_export = log_export[['変更日時', '商品名', '変更前', '変更後', '変動量']]
             
-            # 3. 필요한 컬럼만 선택 (위에서 바꾼 이름과 100% 일치해야 함)
-            # 여기 글자 하나라도 틀리면 KeyError가 납니다.
-            export_df = export_df[['変更日時', '商品名', '変更前', '変更後', '変動量']]
-            
-            # メモリバッファにExcelとして書き込み
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                export_df.to_excel(writer, index=False, sheet_name='変更履歴')
-            
-            # ダウンロードボタン
-            st.download_button(
-                label="📥 履歴データをExcelでダウンロード",
-                data=buffer.getvalue(),
-                file_name=f"Inventory_Logs_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-            st.markdown("<hr style='margin-top: 10px; margin-bottom: 15px;'>", unsafe_allow_html=True)
+            with pd.ExcelWriter(log_buffer, engine='openpyxl') as writer:
+                log_export.to_excel(writer, index=False, sheet_name='変更履歴')
+                
+            with col_dl2:
+                st.download_button(
+                    label="📥 履歴データをDL",  # 이력 데이터 다운로드
+                    data=log_buffer.getvalue(),
+                    file_name=f"Inventory_Logs_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+        
+        st.markdown("<hr style='margin-top: 10px; margin-bottom: 15px;'>", unsafe_allow_html=True)
 
-            # 画面には最新15件のみ表示
+        # ----------------------------------------------------
+        # 화면에는 최신 15건만 표시 (기존과 동일)
+        # ----------------------------------------------------
+        if logs.empty:
+            st.info("表示可能な履歴がありません。")
+        else:
             for _, r in logs.head(15).iterrows():
                 l1, l2 = st.columns([6, 4])
                 l1.markdown(f"**{r['item_name']}**<br><small>{r['created_at']}</small>", unsafe_allow_html=True)
