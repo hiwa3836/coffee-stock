@@ -20,82 +20,72 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (완전 방어형 모바일 레이아웃)
+# 1. UI 디자인 (화면 안으로 요소 밀어넣기)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 기본 배경색 */
         .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
 
-        /* 상단 탭 디자인 */
+        /* 탭 디자인 (너비 최적화) */
         .stTabs [data-baseweb="tab-list"] {
             gap: 4px; background-color: #1e293b !important; padding: 5px;
             border-radius: 10px; border: 1px solid #334155;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 38px; background-color: #334155 !important; color: #94a3b8 !important;
+            height: 36px; background-color: #334155 !important; color: #94a3b8 !important;
             border-radius: 6px !important; border: 1px solid #475569 !important;
-            padding: 0 10px !important; font-size: 0.8rem;
+            padding: 0 8px !important; font-size: 0.75rem;
         }
-        .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: #ffffff !important; }
 
-        /* ★모바일 가로 한 줄 배치를 위한 안전한 Flexbox 설정★ */
+        /* ★핵심: 요소를 왼쪽으로 당기고 화면 안으로 넣기★ */
         div[data-testid="stHorizontalBlock"] {
             display: flex !important;
             flex-direction: row !important;
-            flex-wrap: nowrap !important; /* 줄바꿈 방지 */
+            flex-wrap: nowrap !important;
             align-items: center !important;
             width: 100% !important;
-            gap: 5px !important;
+            gap: 2px !important; /* 간격 최소화 */
         }
         
-        /* 텍스트 컬럼(왼쪽) */
+        /* 텍스트 컬럼 (폭 조절) */
         div[data-testid="column"]:nth-child(1) {
-            flex: 1 1 auto !important;
+            flex: 0 1 60% !important; /* 이름을 60%로 제한 */
             min-width: 0 !important;
         }
 
-        /* 버튼 컬럼(오른쪽) - 버튼이 잘리지 않게 너비 고정 */
+        /* 버튼 컬럼 (안으로 당기기) */
         div[data-testid="column"]:nth-child(2) {
-            flex: 0 0 130px !important; /* 버튼 뭉치 너비 확보 */
+            flex: 0 0 120px !important; /* 버튼 뭉치 너비 고정 */
             display: flex !important;
             justify-content: flex-end !important;
         }
 
-        /* 수량 조절기(Number Input) 디자인 */
+        /* 수량 조절기 디자인 (더 컴팩트하게) */
         div[data-testid="stNumberInput"] {
-            width: 130px !important;
+            width: 120px !important;
         }
-        
-        /* 버튼(-, +) 크기 복구 및 강조 */
         div[data-testid="stNumberInput"] button {
-            width: 36px !important; 
-            height: 36px !important; 
+            width: 32px !important; height: 32px !important;
             background-color: #334155 !important;
-            border: 1px solid #475569 !important;
-            color: white !important;
         }
-
-        /* 숫자 입력창 */
         div[data-testid="stNumberInput"] input {
-            font-size: 0.95rem !important;
-            color: white !important;
-            background-color: #0f172a !important;
+            font-size: 0.9rem !important;
         }
 
-        /* 텍스트 스타일 */
-        .item-name { font-size: 0.9rem; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .item-cap { font-size: 0.75rem; color: #94a3b8; }
+        /* 텍스트 스타일 (겹침 방지 및 크기 축소) */
+        .item-name { font-size: 0.85rem; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .item-cap { font-size: 0.7rem; color: #94a3b8; }
 
-        hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; }
-        .block-container { padding: 1rem 0.6rem !important; }
+        /* 전체 여백 조정 (화면 끝에서 띄우기) */
+        .block-container { padding: 1rem 0.7rem !important; }
+        hr { border-top: 1px solid #334155 !important; margin: 6px 0 !important; }
         #MainMenu, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 (동일)
+# 2. 로직 (생략 없이 통합)
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -133,7 +123,7 @@ def save_changes():
     st.rerun()
 
 # ==========================================
-# 3. 메인 UI
+# 3. 메인 화면
 # ==========================================
 def main():
     st.set_page_config(page_title="RCS", layout="centered")
@@ -144,7 +134,7 @@ def main():
     tab1, tab2, tab3 = st.tabs(["📝 更新", "📜 履歴", "⚙️ 設定"])
 
     with tab1:
-        c1, c2 = st.columns([0.5, 0.5])
+        c1, c2 = st.columns([0.4, 0.6])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
         selected_cat = c1.selectbox("CAT", options=["すべて"] + all_cats, label_visibility="collapsed")
         if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
@@ -159,7 +149,7 @@ def main():
             val = st.session_state.edits.get(i_id, row["current_stock"])
             icon = "🔴" if val <= row["min_stock"] else "🟢"
             
-            # 텍스트와 버튼 컬럼 나란히 배치
+            # 텍스트와 버튼을 가로로 강제 배치
             col_t, col_i = st.columns([0.6, 0.4])
             with col_t:
                 st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
@@ -169,7 +159,6 @@ def main():
                                 label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
             st.markdown("<hr>", unsafe_allow_html=True)
 
-    # (tab2, tab3는 레이아웃 깨짐 방지를 위해 이전 안정 버전 적용)
     with tab2:
         st.subheader("📜 変動履歴")
         logs = st.session_state.logs_df
