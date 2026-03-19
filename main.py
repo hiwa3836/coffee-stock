@@ -1,37 +1,40 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import time
 import requests
+import threading
 from datetime import datetime
 from supabase import create_client, Client
 
 # ==========================================
-# ⚙️ システム設定 (Secretsから取得)
+# ⚙️ システム設定 (Secrets)
 # ==========================================
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 BOT_SERVER_URL = "https://coffee-stock.onrender.com/send_alert"
 
-def send_discord_message(content):
-    try:
-        requests.post(BOT_SERVER_URL, json={"message": content}, timeout=3)
-    except Exception:
-        pass
+# [개선] Discord 알림 비동기 처리 (UI 블로킹 방지)
+def send_discord_message_async(content):
+    def task():
+        try:
+            requests.post(BOT_SERVER_URL, json={"message": content}, timeout=3)
+        except Exception:
+            pass
+    threading.Thread(target=task, daemon=True).start()
 
-# ★ 숫자를 예쁘게 만들어주는 마법의 함수 (3.0 -> 3 / 3.5 -> 3.5)
 def fmt(val):
     v = float(val)
     return int(v) if v.is_integer() else v
 
 # ==========================================
-# 1. UI デザイン (検索窓 & 折りたたみカテゴリ)
+# 1. UI デザイン
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
         .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
-
         .stTabs [data-baseweb="tab-list"] {
             gap: 5px; background-color: #1e293b !important; padding: 5px; border-radius: 10px;
         }
@@ -41,12 +44,9 @@ def inject_custom_css():
             font-weight: bold;
         }
         .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: white !important; }
-
         @media (max-width: 768px) {
             div[data-testid="stHorizontalBlock"]:has(.item-name) {
-                flex-direction: row !important;
-                flex-wrap: nowrap !important;
-                align-items: center !important;
+                flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important;
             }
             div[data-testid="stHorizontalBlock"]:has(.item-name) > div:nth-child(1) {
                 width: 55% !important; flex: 1 1 55% !important; min-width: 0 !important;
@@ -55,24 +55,16 @@ def inject_custom_css():
                 width: 45% !important; flex: 1 1 45% !important; min-width: 120px !important;
             }
         }
-
         div[data-baseweb="input"] > div { background-color: #0f172a !important; }
-
         [data-testid="stExpander"] {
-            background-color: #1e293b !important;
-            border-radius: 10px !important;
-            border: 1px solid #334155 !important;
-            margin-bottom: 8px !important;
+            background-color: #1e293b !important; border-radius: 10px !important;
+            border: 1px solid #334155 !important; margin-bottom: 8px !important;
         }
         [data-testid="stExpander"] summary { padding: 10px 15px !important; }
-        [data-testid="stExpander"] summary p {
-            font-weight: bold !important; color: #60a5fa !important; font-size: 0.95rem !important;
-        }
+        [data-testid="stExpander"] summary p { font-weight: bold !important; color: #60a5fa !important; font-size: 0.95rem !important; }
         [data-testid="stExpanderDetails"] { padding: 0 10px 10px 10px !important; }
-
         .item-name { font-size: 0.95rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .item-cap { font-size: 0.75rem; color: #94a3b8; }
-
         hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; opacity: 0.5; }
         .block-container { padding: 1.5rem 0.6rem !important; }
         #MainMenu, footer {visibility: hidden;}
@@ -95,27 +87,25 @@ def init_state():
 def on_stock_change(item_id):
     st.session_state.edits[item_id] = float(st.session_state[f"input_{item_id}"])
 
-# 1. 원자적 업데이트를 위한 SQL RPC 호출 권장 (Supabase Function)
-# DB 단에서 'current_stock = current_stock + diff' 처리가 필요하지만, 
-# 우선 Python 단에서 최소한의 방어 로직 구현
-
+# [개선] 부분 상태 업데이트, 에러 핸들링 추가
 def save_changes():
     if not st.session_state.edits: return
     
     success_count = 0
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    discord_msg = f"📦 **[在庫更新通知]** ({now})\n"
     
     for i_id, n_val in st.session_state.edits.items():
-        item = st.session_state.inventory_df[st.session_state.inventory_df["id"] == i_id].iloc[0]
+        mask = st.session_state.inventory_df["id"] == i_id
+        item = st.session_state.inventory_df[mask].iloc[0]
         diff = float(n_val) - float(item["current_stock"])
         
         if diff != 0:
-            # 개별 업데이트 시 에러 핸들링 추가
             try:
-                # [개선] 절대값이 아닌 증감값(diff) 기반으로 DB 함수(RPC)를 호출하는 것이 정석
+                # DB 업데이트
                 supabase.table("inventory").update({"current_stock": float(n_val)}).eq("id", i_id).execute()
                 
-                # 로그 삽입
+                # 로그 인서트
                 log_entry = {
                     "item_name": str(item["item_name"]), 
                     "before_qty": float(item["current_stock"]),
@@ -124,33 +114,29 @@ def save_changes():
                     "created_at": now
                 }
                 supabase.table("inventory_logs").insert(log_entry).execute()
+                
+                # [개선] 전체 데이터 재조회 방지 (로컬 DataFrame만 부분 갱신)
+                st.session_state.inventory_df.loc[mask, "current_stock"] = float(n_val)
+                
+                # 디스코드 메시지 조합
+                diff_val = fmt(diff)
+                diff_str = f"+{diff_val}" if diff_val > 0 else f"{diff_val}"
+                discord_msg += f"> **{item['item_name']}**: {fmt(item['current_stock'])} → **{fmt(n_val)}** ({diff_str})\n"
+                
                 success_count += 1
             except Exception as e:
-                st.error(f"Update failed for {item['item_name']}: {e}")
+                st.error(f"⚠️ {item['item_name']} 保存失敗: {e}")
 
     if success_count > 0:
-        # 비동기 처리를 흉내내기 위해 별도 스레드에서 실행하거나 최적화 고려
-        # send_discord_message(discord_msg) 
-        
-        # 전체 삭제 대신 수정한 데이터만 부분 업데이트하는 로직으로 전환 권장
+        send_discord_message_async(discord_msg) # 백그라운드 스레드 실행
         st.session_state.edits = {}
-        if "inventory_df" in st.session_state: del st.session_state.inventory_df
-        st.success(f"{success_count}건의 변경사항이 반영되었습니다.")
+        
+        # 로그는 다음 렌더링 시 최신 75건을 가져오도록 삭제
+        if "logs_df" in st.session_state: del st.session_state.logs_df 
+        
+        st.success(f"✅ {success_count}件の保存が完了しました！")
         time.sleep(0.5)
         st.rerun()
-            
-            # ★ 디스코드 알림에서도 소수점 숨기기 적용
-            diff_val = fmt(diff)
-            diff_str = f"+{diff_val}" if diff_val > 0 else f"{diff_val}"
-            discord_msg += f"> **{item['item_name']}**: {fmt(item['current_stock'])} → **{fmt(n_val)}** ({diff_str})\n"
-    
-    send_discord_message(discord_msg)
-    st.session_state.edits = {}
-    if "inventory_df" in st.session_state: del st.session_state.inventory_df
-    if "logs_df" in st.session_state: del st.session_state.logs_df
-    st.success("保存が完了しました！")
-    time.sleep(1)
-    st.rerun()
 
 # ==========================================
 # 3. メイン UI
@@ -202,15 +188,14 @@ def main():
                     col_t, col_i = st.columns([6, 4])
                     with col_t:
                         st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
-                        # ★ 리스트에 표시될 때도 예쁜 숫자로 (fmt 적용)
                         st.markdown(f"<div class='item-cap'>現在:{fmt(row['current_stock'])} / 目標:{fmt(row['min_stock'])} {row['unit']}</div>", unsafe_allow_html=True)
                     with col_i:
                         st.number_input(
                             "数量", 
                             value=val, 
                             min_value=0.0, 
-                            step=0.5,           
-                            format="%g",        # ★ 핵심! 입력창 안의 숫자를 3.0이 아닌 3으로 보여주는 마법 (%g)
+                            step=0.5,            
+                            format="%g",
                             key=f"input_{i_id}", 
                             label_visibility="collapsed", 
                             on_change=on_stock_change, 
@@ -225,14 +210,12 @@ def main():
         if logs.empty: st.info("履歴がありません。")
         else:
             P_SIZE = 15
-            total_p = min(5, (len(logs)-1)//P_SIZE + 1)
             start = (st.session_state.log_page - 1) * P_SIZE
             p_logs = logs.iloc[start : start + P_SIZE]
             for _, r in p_logs.iterrows():
                 l1, l2 = st.columns([6, 4])
                 l1.markdown(f"**{r['item_name']}**<br><small>{r['created_at']}</small>", unsafe_allow_html=True)
                 
-                # ★ 히스토리에서도 예쁜 숫자로 보이게 적용
                 diff_val = fmt(r['diff_qty'])
                 clr = "#ef4444" if diff_val < 0 else "#10b981"
                 l2.markdown(f"<div style='text-align:right;'><small>{fmt(r['before_qty'])} → {fmt(r['after_qty'])}</small><br><b style='color:{clr};'>{'+' if diff_val > 0 else ''}{diff_val}</b></div>", unsafe_allow_html=True)
@@ -247,7 +230,7 @@ def main():
             n_cat_s = st.selectbox("カテゴリ選択", options=ex_cats + ["(新規作成)"])
             f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名を入力")
             ca, cb = st.columns(2)
-            nm = ca.number_input("通知目安(目標値)", min_value=0.0, step=0.5, format="%g") # ★ 여기도 적용
+            nm = ca.number_input("通知目安(目標値)", min_value=0.0, step=0.5, format="%g")
             nu = cb.text_input("単位", value="個")
             
             if st.button("登録する", type="primary", use_container_width=True):
