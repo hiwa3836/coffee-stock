@@ -20,14 +20,14 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (화면 안으로 요소 밀어넣기)
+# 1. UI 디자인 (박스 너비 제한 및 왼쪽 정렬)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
         .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
 
-        /* 탭 디자인 (너비 최적화) */
+        /* 탭 디자인 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 4px; background-color: #1e293b !important; padding: 5px;
             border-radius: 10px; border: 1px solid #334155;
@@ -38,54 +38,54 @@ def inject_custom_css():
             padding: 0 8px !important; font-size: 0.75rem;
         }
 
-        /* ★핵심: 요소를 왼쪽으로 당기고 화면 안으로 넣기★ */
+        /* ★핵심: 재고 행(박스) 전체 너비를 줄이고 왼쪽으로 배치★ */
         div[data-testid="stHorizontalBlock"] {
             display: flex !important;
             flex-direction: row !important;
             flex-wrap: nowrap !important;
             align-items: center !important;
-            width: 100% !important;
-            gap: 2px !important; /* 간격 최소화 */
+            width: 92% !important; /* ★ 가로 길이를 줄여서 버튼이 화면 안으로 오게 함 */
+            margin-left: 0 !important;
+            gap: 2px !important;
         }
         
-        /* 텍스트 컬럼 (폭 조절) */
+        /* 텍스트 영역 */
         div[data-testid="column"]:nth-child(1) {
-            flex: 0 1 60% !important; /* 이름을 60%로 제한 */
+            flex: 1 1 auto !important;
             min-width: 0 !important;
         }
 
-        /* 버튼 컬럼 (안으로 당기기) */
+        /* 버튼 영역 (안으로 더 당김) */
         div[data-testid="column"]:nth-child(2) {
-            flex: 0 0 120px !important; /* 버튼 뭉치 너비 고정 */
+            flex: 0 0 115px !important; /* 버튼 너비를 115px로 타이트하게 고정 */
             display: flex !important;
             justify-content: flex-end !important;
         }
 
-        /* 수량 조절기 디자인 (더 컴팩트하게) */
+        /* 수량 조절 버튼 디자인 */
         div[data-testid="stNumberInput"] {
-            width: 120px !important;
+            width: 115px !important;
         }
         div[data-testid="stNumberInput"] button {
-            width: 32px !important; height: 32px !important;
+            width: 30px !important; height: 34px !important;
             background-color: #334155 !important;
         }
         div[data-testid="stNumberInput"] input {
             font-size: 0.9rem !important;
         }
 
-        /* 텍스트 스타일 (겹침 방지 및 크기 축소) */
+        /* 아이템 텍스트 스타일 */
         .item-name { font-size: 0.85rem; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .item-cap { font-size: 0.7rem; color: #94a3b8; }
 
-        /* 전체 여백 조정 (화면 끝에서 띄우기) */
-        .block-container { padding: 1rem 0.7rem !important; }
-        hr { border-top: 1px solid #334155 !important; margin: 6px 0 !important; }
+        .block-container { padding: 1rem 0.5rem !important; }
+        hr { border-top: 1px solid #334155 !important; margin: 6px 0 !important; opacity: 0.3; }
         #MainMenu, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 (생략 없이 통합)
+# 2. 로직
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -149,7 +149,7 @@ def main():
             val = st.session_state.edits.get(i_id, row["current_stock"])
             icon = "🔴" if val <= row["min_stock"] else "🟢"
             
-            # 텍스트와 버튼을 가로로 강제 배치
+            # 1행 가로 배치
             col_t, col_i = st.columns([0.6, 0.4])
             with col_t:
                 st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
@@ -181,7 +181,7 @@ def main():
             n_name = st.text_input("商品名")
             ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["커피"]
             n_cat_s = st.selectbox("カテゴリ", options=ex_cats + ["(新規作成)"])
-            f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名")
+            f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ명")
             ca, cb = st.columns(2)
             nm = ca.number_input("目安", min_value=0); nu = cb.text_input("単位", value="個")
             if st.button("登録", type="primary", use_container_width=True):
