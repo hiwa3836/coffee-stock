@@ -1,4 +1,7 @@
-discord.py
+streamlit
+pandas
 supabase
-flask
 requests
+openpyxl
+discord.py
+flask
