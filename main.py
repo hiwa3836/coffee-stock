@@ -6,7 +6,7 @@ from datetime import datetime
 from supabase import create_client, Client
 
 # ==========================================
-# ⚙️ 시스템 설정
+# ⚙️ システム設定 (Secretsから取得)
 # ==========================================
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -20,23 +20,26 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (모바일 최적화 & 설정탭 버그 수정)
+# 1. UI デザイン (モバイル最適化 & 日本語フォント)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
+        /* 全体背景 */
         .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
 
+        /* タブデザイン */
         .stTabs [data-baseweb="tab-list"] {
             gap: 5px; background-color: #1e293b !important; padding: 5px; border-radius: 10px;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 38px; background-color: #334155 !important; color: #94a3b8 !important;
-            font-size: 0.8rem; padding: 0 10px !important; border-radius: 6px !important;
+            height: 40px; background-color: #334155 !important; color: #94a3b8 !important;
+            font-size: 0.85rem; padding: 0 12px !important; border-radius: 6px !important;
+            font-weight: bold;
         }
         .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: white !important; }
 
-        /* 재고 목록에만 모바일 1줄 강제 적용 (설정탭 망가짐 방지) */
+        /* モバイル1行レイアウト (在庫リストのみ適用) */
         @media (max-width: 768px) {
             div[data-testid="stHorizontalBlock"]:has(.item-name) {
                 flex-direction: row !important;
@@ -51,17 +54,21 @@ def inject_custom_css():
             }
         }
 
-        .item-name { font-size: 0.9rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* 在庫項目テキスト */
+        .item-name { font-size: 0.95rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .item-cap { font-size: 0.75rem; color: #94a3b8; }
 
-        hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; opacity: 0.5; }
-        .block-container { padding: 1rem 0.5rem !important; }
+        /* 区切り線と余白 */
+        hr { border-top: 1px solid #334155 !important; margin: 10px 0 !important; opacity: 0.5; }
+        .block-container { padding: 1.5rem 0.6rem !important; }
+        
+        /* 不要なメニューを隠す */
         #MainMenu, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직
+# 2. ロジック管理
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -94,25 +101,26 @@ def save_changes():
     st.session_state.edits = {}
     if "inventory_df" in st.session_state: del st.session_state.inventory_df
     if "logs_df" in st.session_state: del st.session_state.logs_df
-    st.success("保存完了！")
+    st.success("保存が完了しました！")
     time.sleep(1)
     st.rerun()
 
 # ==========================================
-# 3. 메인 화면
+# 3. メイン UI
 # ==========================================
 def main():
-    st.set_page_config(page_title="RCS", layout="centered")
+    st.set_page_config(page_title="RCS在庫管理システム", layout="centered")
     inject_custom_css()
     init_state()
 
-    st.title("📦 RCS")
-    tab1, tab2, tab3 = st.tabs(["📝 更新", "📜 履歴", "⚙️ 設定"])
+    st.title("📦 RCSシステム")
+    tab1, tab2, tab3 = st.tabs(["📝 在庫更新", "📜 変更履歴", "⚙️ 管理設定"])
 
+    # --- TAB 1: 在庫更新 ---
     with tab1:
-        c1, c2 = st.columns([6, 4])
+        c1, c2 = st.columns([0.6, 0.4])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
-        selected_cat = c1.selectbox("CAT", options=["すべて"] + all_cats, label_visibility="collapsed")
+        selected_cat = c1.selectbox("カテゴリ表示", options=["すべて"] + all_cats, label_visibility="collapsed")
         if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
             save_changes()
 
@@ -128,16 +136,17 @@ def main():
             col_t, col_i = st.columns([6, 4])
             with col_t:
                 st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='item-cap'>現:{row['current_stock']} / 目:{row['min_stock']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='item-cap'>現在:{row['current_stock']} / 目標:{row['min_stock']} {row['unit']}</div>", unsafe_allow_html=True)
             with col_i:
-                st.number_input("QTY", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
+                st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
                                 label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
             st.markdown("<hr>", unsafe_allow_html=True)
 
+    # --- TAB 2: 変更履歴 ---
     with tab2:
-        st.subheader("📜 変動履歴")
+        st.subheader("📜 在庫変動履歴 (最新75件)")
         logs = st.session_state.logs_df
-        if logs.empty: st.info("履歴なし")
+        if logs.empty: st.info("履歴がありません。")
         else:
             P_SIZE = 15
             total_p = min(5, (len(logs)-1)//P_SIZE + 1)
@@ -147,34 +156,42 @@ def main():
                 l1, l2 = st.columns([6, 4])
                 l1.markdown(f"**{r['item_name']}**<br><small>{r['created_at']}</small>", unsafe_allow_html=True)
                 diff = r['diff_qty']; clr = "#ef4444" if diff < 0 else "#10b981"
-                l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']}→{r['after_qty']}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
+                l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']} → {r['after_qty']}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
                 st.divider()
 
+    # --- TAB 3: 管理設定 ---
     with tab3:
-        st.subheader("⚙️ 設定")
-        with st.expander("➕ 新規登録"):
+        st.subheader("⚙️ マスタ管理")
+        
+        # 1. 新規アイテム登録
+        with st.expander("➕ 新規アイテム登録"):
             n_name = st.text_input("商品名")
-            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["커피"]
-            n_cat_s = st.selectbox("カテゴリ", options=ex_cats + ["(新規作成)"])
-            f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名")
+            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["コーヒー"]
+            n_cat_s = st.selectbox("カテゴリ選択", options=ex_cats + ["(新規作成)"])
+            f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名を入力")
             ca, cb = st.columns(2)
-            nm = ca.number_input("目安", min_value=0); nu = cb.text_input("単位", value="個")
+            nm = ca.number_input("通知目安(目標値)", min_value=0); nu = cb.text_input("単位", value="個")
             
-            if st.button("登録", type="primary", use_container_width=True):
+            if st.button("登録する", type="primary", use_container_width=True):
                 if not n_name.strip():
                     st.error("⚠️ 商品名を入力してください。")
                 else:
                     try:
-                        supabase.table("inventory").insert({"item_name": n_name, "category": f_cat, "min_stock": int(nm), "unit": nu, "current_stock": 0}).execute()
+                        supabase.table("inventory").insert({
+                            "item_name": n_name, "category": f_cat, 
+                            "min_stock": int(nm), "unit": nu, "current_stock": 0
+                        }).execute()
                         del st.session_state.inventory_df; st.rerun()
-except Exception as e:
-    st.error(f"⚠️ 登録に失敗しました。 (상세 에러: {e})")
+                    except Exception as e:
+                        st.error(f"⚠️ 登録失敗: {e}")
 
         st.divider()
+        
+        # 2. 既存アイテムの編集
         if not st.session_state.inventory_df.empty:
             cur_cats = sorted(st.session_state.inventory_df["category"].unique().tolist())
             for cat in cur_cats:
-                with st.expander(f"📂 {cat}"):
+                with st.expander(f"📂 カテゴリ: {cat}"):
                     c_df = st.session_state.inventory_df[st.session_state.inventory_df["category"] == cat]
                     for _, row in c_df.iterrows():
                         rid = row["id"]; ek = f"em_{rid}"
@@ -183,7 +200,8 @@ except Exception as e:
                         if not st.session_state[ek]:
                             cc1, cc2 = st.columns([7, 3])
                             cc1.markdown(f"**{row['item_name']}** <small>({row['min_stock']}{row['unit']})</small>", unsafe_allow_html=True)
-                            if cc2.button("Edit", key=f"e_{rid}"): st.session_state[ek] = True; st.rerun()
+                            if cc2.button("編集", key=f"e_{rid}", use_container_width=True):
+                                st.session_state[ek] = True; st.rerun()
                         else:
                             st.markdown("---")
                             en = st.text_input("商品名", value=row["item_name"], key=f"n_{rid}")
@@ -194,12 +212,16 @@ except Exception as e:
                             
                             b1, b2, b3 = st.columns(3)
                             if b1.button("💾 保存", key=f"s_{rid}", type="primary", use_container_width=True):
-                                supabase.table("inventory").update({"item_name": en, "category": ec, "min_stock": int(em), "unit": eu}).eq("id", rid).execute()
+                                supabase.table("inventory").update({
+                                    "item_name": en, "category": ec, 
+                                    "min_stock": int(em), "unit": eu
+                                }).eq("id", rid).execute()
                                 st.session_state[ek] = False; del st.session_state.inventory_df; st.rerun()
                             if b2.button("🚫 取消", key=f"b_{rid}", use_container_width=True):
                                 st.session_state[ek] = False; st.rerun()
                             if b3.button("🗑️ 削除", key=f"d_{rid}", use_container_width=True):
-                                supabase.table("inventory").delete().eq("id", rid).execute(); del st.session_state.inventory_df; st.rerun()
+                                supabase.table("inventory").delete().eq("id", rid).execute()
+                                del st.session_state.inventory_df; st.rerun()
                         st.markdown("<hr style='margin:5px 0; opacity:0.1;'>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
