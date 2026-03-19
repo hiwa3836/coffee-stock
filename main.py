@@ -20,7 +20,7 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI デザイン (モバイル最適化 & 日本語フォント)
+# 1. UI デザイン (検索窓 & 折りたたみカテゴリ)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
@@ -37,6 +37,7 @@ def inject_custom_css():
         }
         .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: white !important; }
 
+        /* モバイル1行レイアウト維持 (在庫リストのみ) */
         @media (max-width: 768px) {
             div[data-testid="stHorizontalBlock"]:has(.item-name) {
                 flex-direction: row !important;
@@ -51,10 +52,26 @@ def inject_custom_css():
             }
         }
 
+        /* 検索ボックスや入力欄の背景色 */
+        div[data-baseweb="input"] > div { background-color: #0f172a !important; }
+
+        /* ★ Expander (折りたたみ) のデザイン最適化 ★ */
+        [data-testid="stExpander"] {
+            background-color: #1e293b !important;
+            border-radius: 10px !important;
+            border: 1px solid #334155 !important;
+            margin-bottom: 8px !important;
+        }
+        [data-testid="stExpander"] summary { padding: 10px 15px !important; }
+        [data-testid="stExpander"] summary p {
+            font-weight: bold !important; color: #60a5fa !important; font-size: 0.95rem !important;
+        }
+        [data-testid="stExpanderDetails"] { padding: 0 10px 10px 10px !important; }
+
         .item-name { font-size: 0.95rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .item-cap { font-size: 0.75rem; color: #94a3b8; }
 
-        hr { border-top: 1px solid #334155 !important; margin: 10px 0 !important; opacity: 0.5; }
+        hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; opacity: 0.5; }
         .block-container { padding: 1.5rem 0.6rem !important; }
         #MainMenu, footer {visibility: hidden;}
     </style>
@@ -109,45 +126,57 @@ def main():
     st.title("📦 RCSシステム")
     tab1, tab2, tab3 = st.tabs(["📝 在庫更新", "📜 変更履歴", "⚙️ 管理設定"])
 
-    # --- TAB 1: 在庫更新 (カテゴリ別にグループ化) ---
+    # --- TAB 1: 在庫更新 (検索機能 & 折りたたみ) ---
     with tab1:
+        # 1. 検索バーを最上部に配置
+        search_query = st.text_input("🔍 検索", placeholder="🔍 商品名・カテゴリで検索 (入力後Enter)...", label_visibility="collapsed")
+        
+        # 2. カテゴリ選択と保存ボタン
         c1, c2 = st.columns([0.6, 0.4])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
         selected_cat = c1.selectbox("カテゴリ表示", options=["すべて"] + all_cats, label_visibility="collapsed")
+        
         if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
             save_changes()
 
-        st.markdown("<hr style='margin-top:0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin-top:10px; margin-bottom:15px;'>", unsafe_allow_html=True)
+        
+        # データフィルタリング
         df = st.session_state.inventory_df
-        
-        # 選択されたカテゴリに応じて表示するカテゴリリストを決定
-        cats_to_show = all_cats if selected_cat == "すべて" else [selected_cat]
-        
-        for cat in cats_to_show:
-            # カテゴリのヘッダー（見出し）を表示
-            st.markdown(f"""
-                <div style='background-color:#1e293b; padding:6px 12px; border-radius:6px; 
-                            margin: 15px 0 5px 0; border-left: 4px solid #3b82f6; 
-                            font-size:0.9rem; font-weight:bold; color:#f8fafc;'>
-                    📂 {cat}
-                </div>
-            """, unsafe_allow_html=True)
+        if selected_cat != "すべて":
+            df = df[df["category"] == selected_cat]
             
-            # 該当カテゴリのアイテムだけを表示
-            c_df = df[df["category"] == cat]
-            for _, row in c_df.iterrows():
-                i_id = row["id"]
-                val = st.session_state.edits.get(i_id, row["current_stock"])
-                icon = "🔴" if val <= row["min_stock"] else "🟢"
-                
-                col_t, col_i = st.columns([6, 4])
-                with col_t:
-                    st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='item-cap'>現在:{row['current_stock']} / 目標:{row['min_stock']} {row['unit']}</div>", unsafe_allow_html=True)
-                with col_i:
-                    st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
-                                    label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
-                st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
+        if search_query:
+            # 検索ワードが含まれる商品名 または カテゴリを抽出
+            df = df[df['item_name'].str.contains(search_query, case=False, na=False) | 
+                    df['category'].str.contains(search_query, case=False, na=False)]
+
+        cats_to_show = sorted(df["category"].unique().tolist())
+        
+        # 3. 検索結果が空の場合
+        if df.empty:
+            st.warning("該当するアイテムが見つかりません。")
+            
+        # 4. カテゴリ別に折りたたみ表示 (検索時は自動展開)
+        for cat in cats_to_show:
+            # 検索ワードがある場合は自動で開き(True)、普段は閉じておく(False)
+            is_expanded = True if search_query else False
+            
+            with st.expander(f"📂 {cat}", expanded=is_expanded):
+                c_df = df[df["category"] == cat]
+                for _, row in c_df.iterrows():
+                    i_id = row["id"]
+                    val = st.session_state.edits.get(i_id, row["current_stock"])
+                    icon = "🔴" if val <= row["min_stock"] else "🟢"
+                    
+                    col_t, col_i = st.columns([6, 4])
+                    with col_t:
+                        st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div class='item-cap'>現在:{row['current_stock']} / 目標:{row['min_stock']} {row['unit']}</div>", unsafe_allow_html=True)
+                    with col_i:
+                        st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
+                                        label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
+                    st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
 
     # --- TAB 2: 変更履歴 ---
     with tab2:
@@ -194,7 +223,7 @@ def main():
         if not st.session_state.inventory_df.empty:
             cur_cats = sorted(st.session_state.inventory_df["category"].unique().tolist())
             for cat in cur_cats:
-                with st.expander(f"📂 カテゴリ: {cat}"):
+                with st.expander(f"📂 {cat}"):
                     c_df = st.session_state.inventory_df[st.session_state.inventory_df["category"] == cat]
                     for _, row in c_df.iterrows():
                         rid = row["id"]; ek = f"em_{rid}"
