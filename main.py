@@ -20,15 +20,13 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (재고 목록에만 1줄 강제 적용)
+# 1. UI 디자인 (모바일 최적화 & 설정탭 버그 수정)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 기본 배경 */
         .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
 
-        /* 상단 탭 컴팩트 디자인 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 5px; background-color: #1e293b !important; padding: 5px; border-radius: 10px;
         }
@@ -38,7 +36,7 @@ def inject_custom_css():
         }
         .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: white !important; }
 
-        /* ★핵심: '재고 목록(item-name)'이 있는 줄만 모바일 1줄 강제 적용★ */
+        /* 재고 목록에만 모바일 1줄 강제 적용 (설정탭 망가짐 방지) */
         @media (max-width: 768px) {
             div[data-testid="stHorizontalBlock"]:has(.item-name) {
                 flex-direction: row !important;
@@ -53,7 +51,6 @@ def inject_custom_css():
             }
         }
 
-        /* 텍스트 줄임표 처리 */
         .item-name { font-size: 0.9rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .item-cap { font-size: 0.75rem; color: #94a3b8; }
 
@@ -149,4 +146,61 @@ def main():
             for _, r in p_logs.iterrows():
                 l1, l2 = st.columns([6, 4])
                 l1.markdown(f"**{r['item_name']}**<br><small>{r['created_at']}</small>", unsafe_allow_html=True)
-                diff = r['diff
+                diff = r['diff_qty']; clr = "#ef4444" if diff < 0 else "#10b981"
+                l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']}→{r['after_qty']}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
+                st.divider()
+
+    with tab3:
+        st.subheader("⚙️ 設定")
+        with st.expander("➕ 新規登録"):
+            n_name = st.text_input("商品名")
+            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["커피"]
+            n_cat_s = st.selectbox("カテゴリ", options=ex_cats + ["(新規作成)"])
+            f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名")
+            ca, cb = st.columns(2)
+            nm = ca.number_input("目安", min_value=0); nu = cb.text_input("単位", value="個")
+            
+            if st.button("登録", type="primary", use_container_width=True):
+                if not n_name.strip():
+                    st.error("⚠️ 商品名を入力してください。")
+                else:
+                    try:
+                        supabase.table("inventory").insert({"item_name": n_name, "category": f_cat, "min_stock": int(nm), "unit": nu, "current_stock": 0}).execute()
+                        del st.session_state.inventory_df; st.rerun()
+                    except Exception as e:
+                        st.error("⚠️ 登録に失敗しました。")
+
+        st.divider()
+        if not st.session_state.inventory_df.empty:
+            cur_cats = sorted(st.session_state.inventory_df["category"].unique().tolist())
+            for cat in cur_cats:
+                with st.expander(f"📂 {cat}"):
+                    c_df = st.session_state.inventory_df[st.session_state.inventory_df["category"] == cat]
+                    for _, row in c_df.iterrows():
+                        rid = row["id"]; ek = f"em_{rid}"
+                        if ek not in st.session_state: st.session_state[ek] = False
+                        
+                        if not st.session_state[ek]:
+                            cc1, cc2 = st.columns([7, 3])
+                            cc1.markdown(f"**{row['item_name']}** <small>({row['min_stock']}{row['unit']})</small>", unsafe_allow_html=True)
+                            if cc2.button("Edit", key=f"e_{rid}"): st.session_state[ek] = True; st.rerun()
+                        else:
+                            st.markdown("---")
+                            en = st.text_input("商品名", value=row["item_name"], key=f"n_{rid}")
+                            ec = st.selectbox("カテゴリ", options=cur_cats, index=cur_cats.index(row["category"]), key=f"c_{rid}")
+                            col_s1, col_s2 = st.columns(2)
+                            em = col_s1.number_input("目安", value=int(row["min_stock"]), key=f"m_{rid}")
+                            eu = col_s2.text_input("単位", value=row["unit"], key=f"u_{rid}")
+                            
+                            b1, b2, b3 = st.columns(3)
+                            if b1.button("💾 保存", key=f"s_{rid}", type="primary", use_container_width=True):
+                                supabase.table("inventory").update({"item_name": en, "category": ec, "min_stock": int(em), "unit": eu}).eq("id", rid).execute()
+                                st.session_state[ek] = False; del st.session_state.inventory_df; st.rerun()
+                            if b2.button("🚫 取消", key=f"b_{rid}", use_container_width=True):
+                                st.session_state[ek] = False; st.rerun()
+                            if b3.button("🗑️ 削除", key=f"d_{rid}", use_container_width=True):
+                                supabase.table("inventory").delete().eq("id", rid).execute(); del st.session_state.inventory_df; st.rerun()
+                        st.markdown("<hr style='margin:5px 0; opacity:0.1;'>", unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
