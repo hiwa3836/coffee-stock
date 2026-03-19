@@ -20,69 +20,52 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (여백 0 & 자동 밸런스 조정)
+# 1. UI 디자인 (안전하고 깔끔한 모바일 정렬)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
+        /* 기본 배경 */
         .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
 
+        /* 상단 탭 컴팩트 디자인 */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 4px; background-color: #1e293b !important; padding: 5px; border-radius: 10px;
+            gap: 5px; background-color: #1e293b !important; padding: 5px; border-radius: 10px;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 36px; background-color: #334155 !important; color: #94a3b8 !important;
-            font-size: 0.75rem; padding: 0 8px !important;
+            height: 38px; background-color: #334155 !important; color: #94a3b8 !important;
+            font-size: 0.8rem; padding: 0 10px !important; border-radius: 6px !important;
         }
+        .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: white !important; }
 
-        /* ★핵심: 가로 줄바꿈 방지 및 넘침(밀림) 완벽 차단★ */
-        div[data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            width: 100% !important;
-            gap: 2px !important; /* 간격을 최소화하여 100% 초과 방지 */
-            overflow: hidden !important; 
-        }
-        
-        /* 모바일에서 Streamlit이 강제로 컬럼을 100%로 만드는 것 해제 */
+        /* ★핵심: 모바일에서 위아래로 쪼개지는 현상만 딱 막음★ */
         @media (max-width: 768px) {
-            div[data-testid="column"] {
-                width: auto !important; 
-                flex: 1 1 0px !important; /* 남는 공간을 자동으로 나눠 가짐 */
+            div[data-testid="stHorizontalBlock"] {
+                flex-direction: row !important; /* 무조건 가로로 둬라 */
+                flex-wrap: nowrap !important;   /* 밑으로 떨어지지 마라 */
+                align-items: center !important;
+            }
+            /* 왼쪽 이름칸 (약 55%) */
+            div[data-testid="stHorizontalBlock"] > div:nth-child(1) {
+                width: 55% !important;
+                flex: 1 1 55% !important;
                 min-width: 0 !important;
+            }
+            /* 오른쪽 버튼칸 (약 45% + 최소 너비 보장) */
+            div[data-testid="stHorizontalBlock"] > div:nth-child(2) {
+                width: 45% !important;
+                flex: 1 1 45% !important;
+                min-width: 120px !important; /* ★버튼이 증발하지 않도록 최소 공간 확보★ */
             }
         }
 
-        /* 수량 조절기 (폭발 방지 및 버튼 강제 표시) */
-        div[data-testid="stNumberInput"] {
-            min-width: 100px !important;
-            max-width: 120px !important;
-            margin-left: auto !important; /* 무조건 오른쪽 끝에 붙임 */
-        }
-        div[data-testid="stNumberInput"] button {
-            display: flex !important;
-            width: 32px !important; 
-            height: 32px !important; 
-            background-color: #334155 !important;
-            border: 1px solid #475569 !important;
-            visibility: visible !important; /* 버튼 숨김 완벽 차단 */
-        }
-        div[data-testid="stNumberInput"] input {
-            font-size: 0.9rem !important;
-            text-align: center !important;
-            padding: 0 !important;
-        }
+        /* 텍스트 줄임표 처리 및 폰트 크기 최적화 */
+        .item-name { font-size: 0.9rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .item-cap { font-size: 0.75rem; color: #94a3b8; }
 
-        /* 텍스트 줄임표 처리 (이름이 길어도 밀어내지 않음) */
-        .item-name { 
-            font-size: 0.85rem; font-weight: bold; 
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; 
-        }
-        .item-cap { font-size: 0.7rem; color: #94a3b8; }
-
-        .block-container { padding: 1rem 0.6rem !important; }
-        hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; opacity: 0.5;}
+        /* 여백 정리 */
+        hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; opacity: 0.5; }
+        .block-container { padding: 1rem 0.5rem !important; }
         #MainMenu, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
@@ -137,7 +120,7 @@ def main():
     tab1, tab2, tab3 = st.tabs(["📝 更新", "📜 履歴", "⚙️ 設定"])
 
     with tab1:
-        c1, c2 = st.columns([0.5, 0.5])
+        c1, c2 = st.columns([6, 4])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
         selected_cat = c1.selectbox("CAT", options=["すべて"] + all_cats, label_visibility="collapsed")
         if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
@@ -152,8 +135,7 @@ def main():
             val = st.session_state.edits.get(i_id, row["current_stock"])
             icon = "🔴" if val <= row["min_stock"] else "🟢"
             
-            # 파이썬 레벨에서도 6:4에 가깝게 분배하여 여유 공간 마련
-            col_t, col_i = st.columns([0.55, 0.45])
+            col_t, col_i = st.columns([6, 4])
             with col_t:
                 st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='item-cap'>現:{row['current_stock']} / 目:{row['min_stock']}</div>", unsafe_allow_html=True)
@@ -172,7 +154,7 @@ def main():
             start = (st.session_state.log_page - 1) * P_SIZE
             p_logs = logs.iloc[start : start + P_SIZE]
             for _, r in p_logs.iterrows():
-                l1, l2 = st.columns([0.6, 0.4])
+                l1, l2 = st.columns([6, 4])
                 l1.markdown(f"**{r['item_name']}**<br><small>{r['created_at']}</small>", unsafe_allow_html=True)
                 diff = r['diff_qty']; clr = "#ef4444" if diff < 0 else "#10b981"
                 l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']}→{r['after_qty']}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
@@ -200,7 +182,7 @@ def main():
                         rid = row["id"]; ek = f"em_{rid}"
                         if ek not in st.session_state: st.session_state[ek] = False
                         if not st.session_state[ek]:
-                            cc1, cc2 = st.columns([0.7, 0.3])
+                            cc1, cc2 = st.columns([7, 3])
                             cc1.markdown(f"**{row['item_name']}** ({row['min_stock']}{row['unit']})")
                             if cc2.button("Edit", key=f"e_{rid}"): st.session_state[ek] = True; st.rerun()
                         else:
