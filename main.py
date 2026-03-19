@@ -197,23 +197,25 @@ def main():
             buffer = io.BytesIO()
             export_df = logs.copy()
             
-# 日付のフォーマット処理 (타임존 에러 방지 및 안전한 변환)
+# 1. 날짜 변환 (타임존 에러 방지)
             export_df['created_at'] = pd.to_datetime(
                 export_df['created_at'], 
-                errors='coerce', # 포맷이 이상한 데이터가 있어도 앱이 죽지 않게 함
-                utc=True         # Supabase의 UTC 시간 형식을 인식하게 함
+                errors='coerce', 
+                utc=True
             ).dt.strftime('%Y-%m-%d %H:%M:%S')
             
-            # カラム명을 日本語로 변경 (이 부분은 기존과 동일)
+            # 2. 컬럼명 변경 (오타 없는 정확한 일본어)
+            # 'item_name' -> '商品名' (정확히 일본어 '名'을 사용해야 합니다)
             export_df = export_df.rename(columns={
                 'created_at': '変更日時',
-                'item_name': '商品명',
+                'item_name': '商品名', 
                 'before_qty': '変更前',
                 'after_qty': '変更後',
                 'diff_qty': '変動量'
             })
             
-            # 必要なカラムのみ抽出
+            # 3. 필요한 컬럼만 선택 (위에서 바꾼 이름과 100% 일치해야 함)
+            # 여기 글자 하나라도 틀리면 KeyError가 납니다.
             export_df = export_df[['変更日時', '商品名', '変更前', '変更後', '変動量']]
             
             # メモリバッファにExcelとして書き込み
