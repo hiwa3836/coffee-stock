@@ -1,11 +1,11 @@
-import discord
-from discord.ext import commands
-from flask import Flask, request, jsonify
-import threading  # 🔥 [필수] 이 줄이 반드시 최상단에 있어야 합니다
+import threading
 import os
 import logging
 import time
 import asyncio
+import discord
+from discord.ext import commands
+from flask import Flask, request, jsonify
 
 # --- 0. ログ設定 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,7 +17,7 @@ try:
 except (ValueError, TypeError):
     CHANNEL_ID = 1483110205184278679
 
-# --- 2. Flaskサーバー (404エラー 방지 및 Webhook 수신) ---
+# --- 2. Flaskサーバー (Webhook受信用) ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -26,12 +26,9 @@ def health_check():
 
 @app.route('/send_alert', methods=['POST'])
 def send_alert():
-    """Streamlitからの通知を受信"""
     data = request.json
     message = data.get("message", "")
-    
     if message and bot.is_ready():
-        # 비동기 루프를 사용하여 메시지 전송
         asyncio.run_coroutine_threadsafe(send_discord_message(message), bot.loop)
         return jsonify({"status": "sent"}), 200
     return jsonify({"status": "failed"}), 400
@@ -43,7 +40,7 @@ async def send_discord_message(content):
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    logging.info(f"🌐 Flaskサーバー稼働中 (Port: {port})")
+    logging.info(f"🌐 Flaskサーバー起動 (Port: {port})")
     app.run(host='0.0.0.0', port=port, use_reloader=False)
 
 # --- 3. Discord Bot設定 ---
@@ -55,23 +52,19 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 async def on_ready():
     logging.info(f'🤖 Discord Bot ログイン成功: {bot.user}')
 
-# --- 4. 実行部 (無限ループ保護) ---
+# --- 4. 実行部 ---
 if __name__ == "__main__":
-    # Flaskを先に開始 (Renderの起動チェック対策)
+    # Flaskを最優先で開始
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     time.sleep(5)
 
-    while True:
-        if not TOKEN:
-            logging.error("❌ DISCORD_TOKENが見つかりません。")
-            time.sleep(60)
-            continue
-
+    if not TOKEN:
+        logging.error("❌ DISCORD_TOKENが見つかりません。")
+        while True: time.sleep(60)
+    else:
         try:
-            logging.info("🚀 Discordサーバーへ接続します...")
             bot.run(TOKEN)
         except Exception as e:
-            logging.error(f"🚨 実行エラー: {e}")
-            logging.info("⚠️ 15分間待機してプロセスを維持します...")
-            time.sleep(900)
+            logging.error(f"🚨 エラー発生: {e}")
+            while True: time.sleep(60)
