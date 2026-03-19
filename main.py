@@ -25,10 +25,8 @@ def send_discord_message(content):
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 全体背景 */
         .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
 
-        /* タブデザイン */
         .stTabs [data-baseweb="tab-list"] {
             gap: 5px; background-color: #1e293b !important; padding: 5px; border-radius: 10px;
         }
@@ -39,7 +37,6 @@ def inject_custom_css():
         }
         .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: white !important; }
 
-        /* モバイル1行レイアウト (在庫リストのみ適用) */
         @media (max-width: 768px) {
             div[data-testid="stHorizontalBlock"]:has(.item-name) {
                 flex-direction: row !important;
@@ -54,15 +51,11 @@ def inject_custom_css():
             }
         }
 
-        /* 在庫項目テキスト */
         .item-name { font-size: 0.95rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .item-cap { font-size: 0.75rem; color: #94a3b8; }
 
-        /* 区切り線と余白 */
         hr { border-top: 1px solid #334155 !important; margin: 10px 0 !important; opacity: 0.5; }
         .block-container { padding: 1.5rem 0.6rem !important; }
-        
-        /* 不要なメニューを隠す */
         #MainMenu, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
@@ -116,7 +109,7 @@ def main():
     st.title("📦 RCSシステム")
     tab1, tab2, tab3 = st.tabs(["📝 在庫更新", "📜 変更履歴", "⚙️ 管理設定"])
 
-    # --- TAB 1: 在庫更新 ---
+    # --- TAB 1: 在庫更新 (カテゴリ別にグループ化) ---
     with tab1:
         c1, c2 = st.columns([0.6, 0.4])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
@@ -126,21 +119,35 @@ def main():
 
         st.markdown("<hr style='margin-top:0;'>", unsafe_allow_html=True)
         df = st.session_state.inventory_df
-        if selected_cat != "すべて": df = df[df["category"] == selected_cat]
         
-        for _, row in df.iterrows():
-            i_id = row["id"]
-            val = st.session_state.edits.get(i_id, row["current_stock"])
-            icon = "🔴" if val <= row["min_stock"] else "🟢"
+        # 選択されたカテゴリに応じて表示するカテゴリリストを決定
+        cats_to_show = all_cats if selected_cat == "すべて" else [selected_cat]
+        
+        for cat in cats_to_show:
+            # カテゴリのヘッダー（見出し）を表示
+            st.markdown(f"""
+                <div style='background-color:#1e293b; padding:6px 12px; border-radius:6px; 
+                            margin: 15px 0 5px 0; border-left: 4px solid #3b82f6; 
+                            font-size:0.9rem; font-weight:bold; color:#f8fafc;'>
+                    📂 {cat}
+                </div>
+            """, unsafe_allow_html=True)
             
-            col_t, col_i = st.columns([6, 4])
-            with col_t:
-                st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='item-cap'>現在:{row['current_stock']} / 目標:{row['min_stock']} {row['unit']}</div>", unsafe_allow_html=True)
-            with col_i:
-                st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
-                                label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
-            st.markdown("<hr>", unsafe_allow_html=True)
+            # 該当カテゴリのアイテムだけを表示
+            c_df = df[df["category"] == cat]
+            for _, row in c_df.iterrows():
+                i_id = row["id"]
+                val = st.session_state.edits.get(i_id, row["current_stock"])
+                icon = "🔴" if val <= row["min_stock"] else "🟢"
+                
+                col_t, col_i = st.columns([6, 4])
+                with col_t:
+                    st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='item-cap'>現在:{row['current_stock']} / 目標:{row['min_stock']} {row['unit']}</div>", unsafe_allow_html=True)
+                with col_i:
+                    st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
+                                    label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
+                st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
 
     # --- TAB 2: 変更履歴 ---
     with tab2:
@@ -162,8 +169,6 @@ def main():
     # --- TAB 3: 管理設定 ---
     with tab3:
         st.subheader("⚙️ マスタ管理")
-        
-        # 1. 新規アイテム登録
         with st.expander("➕ 新規アイテム登録"):
             n_name = st.text_input("商品名")
             ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["コーヒー"]
@@ -186,8 +191,6 @@ def main():
                         st.error(f"⚠️ 登録失敗: {e}")
 
         st.divider()
-        
-        # 2. 既存アイテムの編集
         if not st.session_state.inventory_df.empty:
             cur_cats = sorted(st.session_state.inventory_df["category"].unique().tolist())
             for cat in cur_cats:
