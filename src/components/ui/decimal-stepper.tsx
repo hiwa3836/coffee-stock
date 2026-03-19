@@ -1,9 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Minus, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button"; 
-import { Input } from "@/components/ui/input";
 import { useLongPress } from "@/hooks/use-long-press";
 
 interface DecimalStepperProps {
@@ -25,19 +22,29 @@ export function DecimalStepper({ value, onChange, min = 0, max = 100 }: DecimalS
     onChange(fixed);
   };
 
-  const incrementProps = useLongPress(() => updateValue(value + 0.5));
-  const decrementProps = useLongPress(() => updateValue(value - 0.5));
+  const increment = () => updateValue(value + 0.5);
+  const decrement = () => updateValue(value - 0.5);
+
+  const incrementProps = useLongPress(increment, 150);
+  const decrementProps = useLongPress(decrement, 150);
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="icon" {...decrementProps} className="select-none touch-manipulation">
-        <Minus className="h-4 w-4" />
-      </Button>
-      <Input
+      {/* 마이너스 버튼 */}
+      <button
+        {...decrementProps}
+        className="w-10 h-10 flex items-center justify-center border rounded-md bg-white hover:bg-gray-100 active:bg-gray-200 disabled:opacity-50 select-none touch-manipulation"
+        disabled={value <= min}
+      >
+        <span className="text-xl font-bold">−</span>
+      </button>
+
+      {/* 입력창 */}
+      <input
         type="text"
         inputMode="decimal"
         pattern="[0-9\.]*"
-        className="w-20 text-center"
+        className="w-20 h-10 text-center border rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
         value={inputValue}
         onChange={(e) => {
           if (/^-?\d*\.?\d{0,1}$/.test(e.target.value)) {
@@ -48,9 +55,15 @@ export function DecimalStepper({ value, onChange, min = 0, max = 100 }: DecimalS
         }}
         onBlur={() => setInputValue(value.toFixed(1))}
       />
-      <Button variant="outline" size="icon" {...incrementProps} className="select-none touch-manipulation">
-        <Plus className="h-4 w-4" />
-      </Button>
+
+      {/* 플러스 버튼 */}
+      <button
+        {...incrementProps}
+        className="w-10 h-10 flex items-center justify-center border rounded-md bg-white hover:bg-gray-100 active:bg-gray-200 disabled:opacity-50 select-none touch-manipulation"
+        disabled={value >= max}
+      >
+        <span className="text-xl font-bold">+</span>
+      </button>
     </div>
   );
 }
