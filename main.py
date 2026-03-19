@@ -167,8 +167,8 @@ def main():
                     try:
                         supabase.table("inventory").insert({"item_name": n_name, "category": f_cat, "min_stock": int(nm), "unit": nu, "current_stock": 0}).execute()
                         del st.session_state.inventory_df; st.rerun()
-                        except Exception as e:
-                        st.error(f"⚠️ 登録に失敗しました。 (상세 에러: {e})")
+except Exception as e:
+    st.error(f"⚠️ 登録に失敗しました。 (상세 에러: {e})")
 
         st.divider()
         if not st.session_state.inventory_df.empty:
