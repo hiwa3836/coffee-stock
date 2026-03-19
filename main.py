@@ -20,14 +20,12 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (모바일 1행 강제 배치)
+# 1. UI 디자인 (모바일 최적화 & 딥 네이비)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
         .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
-
-        /* 탭 디자인 */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px; background-color: #1e293b !important; padding: 10px;
             border-radius: 14px; border: 1px solid #334155; margin-bottom: 20px;
@@ -35,55 +33,34 @@ def inject_custom_css():
         .stTabs [data-baseweb="tab"] {
             height: 48px; background-color: #334155 !important; color: #94a3b8 !important;
             border-radius: 8px !important; border: 1px solid #475569 !important;
-            padding: 0 10px !important; font-size: 0.85rem;
+            padding: 0 12px !important; font-size: 0.85rem;
         }
         .stTabs [aria-selected="true"] {
             background-color: #2563eb !important; color: #ffffff !important;
         }
 
-        /* ★핵심: 모바일에서도 컬럼이 쌓이지 않고 가로로 유지되도록 강제★ */
-        [data-testid="column"] {
-            width: fit-content !important;
-            min-width: 0px !important;
-            flex-basis: auto !important;
-        }
-        
-        /* 컬럼들을 감싸는 컨테이너를 가로 정렬(Flex)로 고정 */
+        /* 모바일 가로 1행 유지 */
+        [data-testid="column"] { width: fit-content !important; min-width: 0px !important; flex-basis: auto !important; }
         [data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important; /* 줄바꿈 절대 방지 */
-            align-items: center !important;
+            display: flex !important; flex-direction: row !important;
+            flex-wrap: nowrap !important; align-items: center !important;
             justify-content: space-between !important;
         }
 
-        /* 수량 조절기 디자인 */
-        div[data-testid="stNumberInput"] {
-            width: 130px !important; /* 모바일용 최적 너비 */
-        }
-        
-        div[data-testid="stNumberInput"] button {
-            width: 35px !important;
-            height: 35px !important;
-            background-color: #334155 !important;
-        }
-
-        div[data-testid="stNumberInput"] input {
-            font-size: 1rem !important;
-            padding: 0px !important;
-        }
+        /* 수량 조절기 */
+        div[data-testid="stNumberInput"] { width: 130px !important; margin-left: auto; }
+        div[data-testid="stNumberInput"] button { width: 35px !important; height: 35px !important; background-color: #334155 !important; }
+        div[data-testid="stNumberInput"] input { font-size: 1rem !important; }
 
         .stCaption { color: #94a3b8 !important; font-size: 0.8rem; white-space: nowrap; }
         hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; }
-        
-        /* 불필요한 여백 제거 */
         .block-container { padding: 1rem 0.8rem !important; }
         #MainMenu, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 (생략 없이 통합)
+# 2. 로직 및 데이터 관리
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -133,8 +110,8 @@ def main():
 
     with tab1:
         c1, c2 = st.columns([1, 1])
-        cats = ["すべて"] + sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["すべて"]
-        selected_cat = c1.selectbox("카테고리", options=cats, label_visibility="collapsed")
+        all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
+        selected_cat = c1.selectbox("카테고리", options=["すべて"] + all_cats, label_visibility="collapsed")
         if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
             save_changes()
 
@@ -146,8 +123,6 @@ def main():
             i_id = row["id"]
             val = st.session_state.edits.get(i_id, row["current_stock"])
             icon = "🔴" if val <= row["min_stock"] else "🟢"
-            
-            # 컬럼 비율을 모바일 최적화로 설정 (텍스트가 넉넉하게)
             col_text, col_input = st.columns([0.65, 0.35])
             with col_text:
                 st.markdown(f"**{icon} {row['item_name']}**")
@@ -178,11 +153,12 @@ def main():
             if p3.button("➡️"): st.session_state.log_page = min(total_p, st.session_state.log_page + 1); st.rerun()
 
     with tab3:
-        st.subheader("⚙️ 設定")
-        with st.expander("➕ 新規登録"):
+        st.subheader("⚙️ マ스타管理")
+        # 1. 신규 등록
+        with st.expander("➕ 新規登録", expanded=False):
             n_name = st.text_input("商品名")
-            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["커피"]
-            n_cat_s = st.selectbox("카테고리", options=ex_cats + ["(新規作成)"])
+            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["コーヒー"]
+            n_cat_s = st.selectbox("カテゴリ", options=ex_cats + ["(新規作成)"])
             f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名")
             ca, cb = st.columns(2)
             nm = ca.number_input("目安", min_value=0); nu = cb.text_input("単位", value="個")
@@ -191,24 +167,44 @@ def main():
                 del st.session_state.inventory_df; st.rerun()
 
         st.divider()
+        
+        # 2. 기존 아이템 수정 (개선됨)
         if not st.session_state.inventory_df.empty:
-            for cat in sorted(st.session_state.inventory_df["category"].unique()):
+            current_categories = sorted(st.session_state.inventory_df["category"].unique().tolist())
+            for cat in current_categories:
                 with st.expander(f"📂 {cat}"):
                     c_df = st.session_state.inventory_df[st.session_state.inventory_df["category"] == cat]
                     for _, row in c_df.iterrows():
                         rid = row["id"]; ek = f"em_{rid}"
                         if ek not in st.session_state: st.session_state[ek] = False
+                        
                         if not st.session_state[ek]:
-                            cc1, cc2 = st.columns([0.7, 0.3])
-                            cc1.markdown(f"**{row['item_name']}** ({row['min_stock']}{row['unit']})")
-                            if cc2.button("Edit", key=f"e_{rid}"): st.session_state[ek] = True; st.rerun()
+                            # 평상시 모드
+                            cc1, cc2 = st.columns([0.75, 0.25])
+                            cc1.markdown(f"**{row['item_name']}** <small>({row['min_stock']}{row['unit']})</small>", unsafe_allow_html=True)
+                            if cc2.button("Edit", key=f"e_{rid}", use_container_width=True):
+                                st.session_state[ek] = True; st.rerun()
                         else:
-                            en = st.text_input("名", value=row["item_name"], key=f"n_{rid}")
-                            ec = st.text_input("種", value=row["category"], key=f"c_{rid}")
-                            if st.button("Save", key=f"s_{rid}", type="primary"):
-                                supabase.table("inventory").update({"item_name": en, "category": ec}).eq("id", rid).execute()
+                            # 컴팩트 편집 모드
+                            st.info(f"Editing: {row['item_name']}")
+                            en = st.text_input("商品名", value=row["item_name"], key=f"n_{rid}")
+                            # 카테고리를 직접 입력이 아닌 기존 목록에서 선택
+                            ec = st.selectbox("カテゴリ", options=current_categories, index=current_categories.index(row["category"]), key=f"c_{rid}")
+                            
+                            col_sub1, col_sub2 = st.columns(2)
+                            em = col_sub1.number_input("目安", value=int(row["min_stock"]), key=f"m_{rid}")
+                            eu = col_sub2.text_input("単位", value=row["unit"], key=f"u_{rid}")
+                            
+                            b1, b2, b3 = st.columns([4, 3, 3])
+                            if b1.button("Save", key=f"s_{rid}", type="primary", use_container_width=True):
+                                supabase.table("inventory").update({"item_name": en, "category": ec, "min_stock": int(em), "unit": eu}).eq("id", rid).execute()
                                 st.session_state[ek] = False; del st.session_state.inventory_df; st.rerun()
-                            if st.button("Back", key=f"b_{rid}"): st.session_state[ek] = False; st.rerun()
+                            if b2.button("Cancel", key=f"b_{rid}", use_container_width=True):
+                                st.session_state[ek] = False; st.rerun()
+                            if b3.button("Del", key=f"d_{rid}", use_container_width=True):
+                                supabase.table("inventory").delete().eq("id", rid).execute()
+                                del st.session_state.inventory_df; st.rerun()
+                        st.markdown("<hr style='margin:5px 0; opacity:0.1;'>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
