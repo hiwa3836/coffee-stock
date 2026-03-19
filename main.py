@@ -20,7 +20,7 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (박스 너비 제한 및 왼쪽 정렬)
+# 1. UI 디자인 (좌우 5:5 배치 & 버튼 강제 표시)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
@@ -29,63 +29,73 @@ def inject_custom_css():
 
         /* 탭 디자인 */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 4px; background-color: #1e293b !important; padding: 5px;
-            border-radius: 10px; border: 1px solid #334155;
+            gap: 4px; background-color: #1e293b !important; padding: 5px; border-radius: 10px;
         }
         .stTabs [data-baseweb="tab"] {
             height: 36px; background-color: #334155 !important; color: #94a3b8 !important;
-            border-radius: 6px !important; border: 1px solid #475569 !important;
-            padding: 0 8px !important; font-size: 0.75rem;
+            font-size: 0.75rem; padding: 0 8px !important;
         }
 
-        /* ★핵심: 재고 행(박스) 전체 너비를 줄이고 왼쪽으로 배치★ */
+        /* ★핵심: 좌우 5:5 강제 고정 및 한 줄 유지★ */
         div[data-testid="stHorizontalBlock"] {
             display: flex !important;
             flex-direction: row !important;
             flex-wrap: nowrap !important;
             align-items: center !important;
-            width: 92% !important; /* ★ 가로 길이를 줄여서 버튼이 화면 안으로 오게 함 */
-            margin-left: 0 !important;
-            gap: 2px !important;
+            width: 100% !important;
         }
         
-        /* 텍스트 영역 */
+        /* 왼쪽 텍스트 칸 (정확히 50%) */
         div[data-testid="column"]:nth-child(1) {
-            flex: 1 1 auto !important;
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
             min-width: 0 !important;
         }
 
-        /* 버튼 영역 (안으로 더 당김) */
+        /* 오른쪽 버튼 칸 (정확히 50%) */
         div[data-testid="column"]:nth-child(2) {
-            flex: 0 0 115px !important; /* 버튼 너비를 115px로 타이트하게 고정 */
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
             display: flex !important;
             justify-content: flex-end !important;
         }
 
-        /* 수량 조절 버튼 디자인 */
+        /* ★버튼 복구: Number Input 내부 요소 강제 조정★ */
         div[data-testid="stNumberInput"] {
-            width: 115px !important;
+            width: 100% !important;
+            max-width: 130px !important; /* 버튼 뭉치 최대 너비 */
         }
+        
+        /* 버튼(-, +)이 숨겨지지 않도록 강제 노출 */
         div[data-testid="stNumberInput"] button {
-            width: 30px !important; height: 34px !important;
+            display: flex !important;
+            width: 35px !important; 
+            height: 35px !important; 
             background-color: #334155 !important;
+            border: 1px solid #475569 !important;
+            visibility: visible !important;
         }
+
         div[data-testid="stNumberInput"] input {
             font-size: 0.9rem !important;
+            text-align: center !important;
         }
 
-        /* 아이템 텍스트 스타일 */
-        .item-name { font-size: 0.85rem; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* 이름이 길면 줄임표(...) 처리 */
+        .item-name { 
+            font-size: 0.85rem; font-weight: bold; 
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; 
+        }
         .item-cap { font-size: 0.7rem; color: #94a3b8; }
 
-        .block-container { padding: 1rem 0.5rem !important; }
-        hr { border-top: 1px solid #334155 !important; margin: 6px 0 !important; opacity: 0.3; }
+        .block-container { padding: 1rem 0.6rem !important; }
+        hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; }
         #MainMenu, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직
+# 2. 로직 (기존과 동일)
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -123,7 +133,7 @@ def save_changes():
     st.rerun()
 
 # ==========================================
-# 3. 메인 화면
+# 3. 메인 화면 (5:5 컬럼 적용)
 # ==========================================
 def main():
     st.set_page_config(page_title="RCS", layout="centered")
@@ -134,7 +144,7 @@ def main():
     tab1, tab2, tab3 = st.tabs(["📝 更新", "📜 履歴", "⚙️ 設定"])
 
     with tab1:
-        c1, c2 = st.columns([0.4, 0.6])
+        c1, c2 = st.columns([0.5, 0.5])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
         selected_cat = c1.selectbox("CAT", options=["すべて"] + all_cats, label_visibility="collapsed")
         if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
@@ -149,8 +159,8 @@ def main():
             val = st.session_state.edits.get(i_id, row["current_stock"])
             icon = "🔴" if val <= row["min_stock"] else "🟢"
             
-            # 1행 가로 배치
-            col_t, col_i = st.columns([0.6, 0.4])
+            # 5:5 가로 배치
+            col_t, col_i = st.columns([0.5, 0.5])
             with col_t:
                 st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='item-cap'>現:{row['current_stock']} / 目:{row['min_stock']}</div>", unsafe_allow_html=True)
@@ -174,19 +184,6 @@ def main():
                 diff = r['diff_qty']; clr = "#ef4444" if diff < 0 else "#10b981"
                 l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']}→{r['after_qty']}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
                 st.divider()
-
-    with tab3:
-        st.subheader("⚙️ 設定")
-        with st.expander("➕ 新規登録"):
-            n_name = st.text_input("商品名")
-            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["커피"]
-            n_cat_s = st.selectbox("カテゴリ", options=ex_cats + ["(新規作成)"])
-            f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ명")
-            ca, cb = st.columns(2)
-            nm = ca.number_input("目安", min_value=0); nu = cb.text_input("単位", value="個")
-            if st.button("登録", type="primary", use_container_width=True):
-                supabase.table("inventory").insert({"item_name": n_name, "category": f_cat, "min_stock": int(nm), "unit": nu, "current_stock": 0}).execute()
-                del st.session_state.inventory_df; st.rerun()
 
 if __name__ == "__main__":
     main()
