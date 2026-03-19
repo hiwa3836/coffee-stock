@@ -91,7 +91,8 @@ def init_state():
     if "log_page" not in st.session_state: st.session_state.log_page = 1
 
 def on_stock_change(item_id):
-    st.session_state.edits[item_id] = int(st.session_state[f"input_{item_id}"])
+    # ★ 小数点(float)として値を取得するように変更
+    st.session_state.edits[item_id] = float(st.session_state[f"input_{item_id}"])
 
 def save_changes():
     if not st.session_state.edits: return
@@ -99,14 +100,21 @@ def save_changes():
     discord_msg = f"📦 **[在庫更新通知]** ({now})\n"
     for i_id, n_val in st.session_state.edits.items():
         item = st.session_state.inventory_df[st.session_state.inventory_df["id"] == i_id].iloc[0]
-        diff = int(n_val) - int(item["current_stock"])
+        # ★ 変動値の計算を小数対応に
+        diff = float(n_val) - float(item["current_stock"])
         if diff != 0:
-            supabase.table("inventory").update({"current_stock": int(n_val)}).eq("id", i_id).execute()
-            log_entry = {"item_name": str(item["item_name"]), "before_qty": int(item["current_stock"]),
-                         "after_qty": int(n_val), "diff_qty": int(diff), "created_at": now}
+            supabase.table("inventory").update({"current_stock": float(n_val)}).eq("id", i_id).execute()
+            log_entry = {
+                "item_name": str(item["item_name"]), 
+                "before_qty": float(item["current_stock"]),
+                "after_qty": float(n_val), 
+                "diff_qty": float(diff), 
+                "created_at": now
+            }
             supabase.table("inventory_logs").insert(log_entry).execute()
-            diff_str = f"+{diff}" if diff > 0 else f"{diff}"
+            diff_str = f"+{diff:.1f}" if diff > 0 else f"{diff:.1f}"
             discord_msg += f"> **{item['item_name']}**: {item['current_stock']} → **{n_val}** ({diff_str})\n"
+    
     send_discord_message(discord_msg)
     st.session_state.edits = {}
     if "inventory_df" in st.session_state: del st.session_state.inventory_df
@@ -128,10 +136,8 @@ def main():
 
     # --- TAB 1: 在庫更新 (検索機能 & 折りたたみ) ---
     with tab1:
-        # 1. 検索バーを最上部に配置
         search_query = st.text_input("🔍 検索", placeholder="🔍 商品名・カテゴリで検索 (入力後Enter)...", label_visibility="collapsed")
         
-        # 2. カテゴリ選択と保存ボタン
         c1, c2 = st.columns([0.6, 0.4])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
         selected_cat = c1.selectbox("カテゴリ表示", options=["すべて"] + all_cats, label_visibility="collapsed")
@@ -141,41 +147,47 @@ def main():
 
         st.markdown("<hr style='margin-top:10px; margin-bottom:15px;'>", unsafe_allow_html=True)
         
-        # データフィルタリング
         df = st.session_state.inventory_df
         if selected_cat != "すべて":
             df = df[df["category"] == selected_cat]
             
         if search_query:
-            # 検索ワードが含まれる商品名 または カテゴリを抽出
             df = df[df['item_name'].str.contains(search_query, case=False, na=False) | 
                     df['category'].str.contains(search_query, case=False, na=False)]
 
         cats_to_show = sorted(df["category"].unique().tolist())
         
-        # 3. 検索結果が空の場合
         if df.empty:
             st.warning("該当するアイテムが見つかりません。")
             
-        # 4. カテゴリ別に折りたたみ表示 (検索時は自動展開)
         for cat in cats_to_show:
-            # 検索ワードがある場合は自動で開き(True)、普段は閉じておく(False)
             is_expanded = True if search_query else False
             
             with st.expander(f"📂 {cat}", expanded=is_expanded):
                 c_df = df[df["category"] == cat]
                 for _, row in c_df.iterrows():
                     i_id = row["id"]
-                    val = st.session_state.edits.get(i_id, row["current_stock"])
-                    icon = "🔴" if val <= row["min_stock"] else "🟢"
+                    # ★ デフォルト値を小数で取得
+                    val = float(st.session_state.edits.get(i_id, row["current_stock"]))
+                    icon = "🔴" if val <= float(row["min_stock"]) else "🟢"
                     
                     col_t, col_i = st.columns([6, 4])
                     with col_t:
                         st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
                         st.markdown(f"<div class='item-cap'>現在:{row['current_stock']} / 目標:{row['min_stock']} {row['unit']}</div>", unsafe_allow_html=True)
                     with col_i:
-                        st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
-                                        label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
+                        # ★ inputを小数(0.5単位)に変更
+                        st.number_input(
+                            "数量", 
+                            value=val, 
+                            min_value=0.0, 
+                            step=0.5,           # ★ ここが0.5単位の鍵！
+                            format="%.1f",      # ★ 小数第1位まで表示
+                            key=f"input_{i_id}", 
+                            label_visibility="collapsed", 
+                            on_change=on_stock_change, 
+                            args=(i_id,)
+                        )
                     st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
 
     # --- TAB 2: 変更履歴 ---
@@ -191,7 +203,7 @@ def main():
             for _, r in p_logs.iterrows():
                 l1, l2 = st.columns([6, 4])
                 l1.markdown(f"**{r['item_name']}**<br><small>{r['created_at']}</small>", unsafe_allow_html=True)
-                diff = r['diff_qty']; clr = "#ef4444" if diff < 0 else "#10b981"
+                diff = float(r['diff_qty']); clr = "#ef4444" if diff < 0 else "#10b981"
                 l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']} → {r['after_qty']}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
                 st.divider()
 
@@ -204,7 +216,8 @@ def main():
             n_cat_s = st.selectbox("カテゴリ選択", options=ex_cats + ["(新規作成)"])
             f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名を入力")
             ca, cb = st.columns(2)
-            nm = ca.number_input("通知目安(目標値)", min_value=0); nu = cb.text_input("単位", value="個")
+            nm = ca.number_input("通知目安(目標値)", min_value=0.0, step=0.5, format="%.1f") # ★ ここも小数対応
+            nu = cb.text_input("単位", value="個")
             
             if st.button("登録する", type="primary", use_container_width=True):
                 if not n_name.strip():
@@ -213,7 +226,7 @@ def main():
                     try:
                         supabase.table("inventory").insert({
                             "item_name": n_name, "category": f_cat, 
-                            "min_stock": int(nm), "unit": nu, "current_stock": 0
+                            "min_stock": float(nm), "unit": nu, "current_stock": 0.0 # ★ 初期値を0.0に
                         }).execute()
                         del st.session_state.inventory_df; st.rerun()
                     except Exception as e:
@@ -239,14 +252,14 @@ def main():
                             en = st.text_input("商品名", value=row["item_name"], key=f"n_{rid}")
                             ec = st.selectbox("カテゴリ", options=cur_cats, index=cur_cats.index(row["category"]), key=f"c_{rid}")
                             col_s1, col_s2 = st.columns(2)
-                            em = col_s1.number_input("目安", value=int(row["min_stock"]), key=f"m_{rid}")
+                            em = col_s1.number_input("目安", value=float(row["min_stock"]), step=0.5, format="%.1f", key=f"m_{rid}") # ★ 小数対応
                             eu = col_s2.text_input("単位", value=row["unit"], key=f"u_{rid}")
                             
                             b1, b2, b3 = st.columns(3)
                             if b1.button("💾 保存", key=f"s_{rid}", type="primary", use_container_width=True):
                                 supabase.table("inventory").update({
                                     "item_name": en, "category": ec, 
-                                    "min_stock": int(em), "unit": eu
+                                    "min_stock": float(em), "unit": eu
                                 }).eq("id", rid).execute()
                                 st.session_state[ek] = False; del st.session_state.inventory_df; st.rerun()
                             if b2.button("🚫 取消", key=f"b_{rid}", use_container_width=True):
