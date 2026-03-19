@@ -7,7 +7,7 @@ from datetime import datetime
 from supabase import create_client, Client
 
 # ==========================================
-# ⚙️ 시스템 설정
+# ⚙️ システム設定 (Secrets)
 # ==========================================
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -26,7 +26,7 @@ def fmt(val):
     return int(v) if v.is_integer() else v
 
 # ==========================================
-# 1. UI 디자인 (CSS)
+# 1. UI デザイン (CSS)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
@@ -52,7 +52,7 @@ def inject_custom_css():
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 관리 (RPC 기반)
+# 2. ロジック管理 (RPC)
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -80,7 +80,6 @@ def save_changes():
         
         if diff != 0:
             try:
-                # [Vulnerability Fix] RPC 호출: 재고 업데이트와 로그 기록을 원자적으로 처리
                 supabase.rpc("update_inventory_atomic", {
                     "p_id": int(i_id),
                     "p_new_stock": float(n_val),
@@ -89,46 +88,46 @@ def save_changes():
                     "p_before_qty": float(item["current_stock"])
                 }).execute()
                 
-                # 로컬 세션 상태만 즉시 업데이트 (전체 재조회 방지)
                 st.session_state.inventory_df.loc[mask, "current_stock"] = float(n_val)
                 
                 diff_str = f"+{fmt(diff)}" if diff > 0 else f"{fmt(diff)}"
                 discord_msg += f"> **{item['item_name']}**: {fmt(item['current_stock'])} → **{fmt(n_val)}** ({diff_str})\n"
                 success_count += 1
             except Exception as e:
-                st.error(f"⚠️ {item['item_name']} 保存失敗: {e}")
+                st.error(f"⚠️ {item['item_name']} の保存に失敗しました: {e}")
 
     if success_count > 0:
         send_discord_message_async(discord_msg)
         st.session_state.edits = {}
         if "logs_df" in st.session_state: del st.session_state.logs_df
-        st.success(f"✅ {success_count}건 저장 완료!")
+        st.success(f"✅ {success_count}件の在庫を更新しました。")
         time.sleep(0.5)
         st.rerun()
 
 # ==========================================
-# 3. 메인 UI
+# 3. メイン UI
 # ==========================================
 def main():
-    st.set_page_config(page_title="RCS", layout="centered")
+    st.set_page_config(page_title="RCS 在庫管理システム", layout="centered")
     inject_custom_css()
     init_state()
 
-    st.title("📦 RCS 시스템")
-    tab1, tab2, tab3 = st.tabs(["📝 재고 업데이트", "📜 변경 이력", "⚙️ 설정"])
+    st.title("📦 RCS 在庫管理システム")
+    tab1, tab2, tab3 = st.tabs(["📝 在庫更新", "📜 変更履歴", "⚙️ 管理設定"])
 
+    # --- TAB 1: 在庫更新 ---
     with tab1:
-        search = st.text_input("🔍 검색", placeholder="검색어 입력...", label_visibility="collapsed")
+        search = st.text_input("🔍 検索", placeholder="商品名で検索...", label_visibility="collapsed")
         
         c1, c2 = st.columns([0.6, 0.4])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
-        sel_cat = c1.selectbox("카테고리", options=["전체"] + all_cats, label_visibility="collapsed")
+        sel_cat = c1.selectbox("表示カテゴリ", options=["すべて"] + all_cats, label_visibility="collapsed")
         
-        if c2.button("✅ 저장", type="primary", use_container_width=True, disabled=not st.session_state.edits):
+        if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
             save_changes()
 
         df = st.session_state.inventory_df
-        if sel_cat != "전체": df = df[df["category"] == sel_cat]
+        if sel_cat != "すべて": df = df[df["category"] == sel_cat]
         if search: df = df[df['item_name'].str.contains(search, case=False, na=False)]
 
         for cat in sorted(df["category"].unique().tolist()):
@@ -140,14 +139,18 @@ def main():
                     icon = "🔴" if val <= float(row["min_stock"]) else "🟢"
                     
                     t, i = st.columns([6, 4])
-                    t.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div><div class='item-cap'>현재:{fmt(row['current_stock'])} / 목표:{fmt(row['min_stock'])} {row['unit']}</div>", unsafe_allow_html=True)
-                    i.number_input("수량", value=val, step=0.5, format="%g", key=f"input_{i_id}", label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
+                    t.markdown(f"""
+                        <div class='item-name'>{icon} {row['item_name']}</div>
+                        <div class='item-cap'>現在: {fmt(row['current_stock'])} / 目標: {fmt(row['min_stock'])} {row['unit']}</div>
+                    """, unsafe_allow_html=True)
+                    i.number_input("数量", value=val, step=0.5, format="%g", key=f"input_{i_id}", label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
                     st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
 
+    # --- TAB 2: 変更履歴 ---
     with tab2:
-        st.subheader("📜 최근 변경 이력")
+        st.subheader("📜 直近の変更履歴 (最新15件)")
         logs = st.session_state.logs_df
-        if logs.empty: st.info("이력이 없습니다.")
+        if logs.empty: st.info("表示可能な履歴がありません。")
         else:
             for _, r in logs.head(15).iterrows():
                 l1, l2 = st.columns([6, 4])
@@ -157,18 +160,81 @@ def main():
                 l2.markdown(f"<div style='text-align:right;'><small>{fmt(r['before_qty'])} → {fmt(r['after_qty'])}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
                 st.divider()
 
+    # --- TAB 3: 管理設定 ---
     with tab3:
-        st.subheader("⚙️ 마스터 관리")
-        with st.expander("➕ 새 품목 등록"):
-            n_name = st.text_input("품목명")
+        st.subheader("⚙️ マスタデータ管理")
+        
+        # 1. 신규 아이템 등록 (카테고리 선택/신규작성 복구)
+        with st.expander("➕ 新規アイテムの登録"):
+            n_name = st.text_input("商品名")
+            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["コーヒー"]
+            n_cat_s = st.selectbox("カテゴリ選択", options=ex_cats + ["(新規作成)"])
+            f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名を入力")
+            
             ca, cb = st.columns(2)
-            nm = ca.number_input("목표 재고", min_value=0.0, step=0.5, format="%g")
-            nu = cb.text_input("단위", value="개")
-            if st.button("등록", type="primary", use_container_width=True):
-                if n_name:
-                    supabase.table("inventory").insert({"item_name": n_name, "category": "기본", "min_stock": float(nm), "unit": nu, "current_stock": 0.0}).execute()
-                    if "inventory_df" in st.session_state: del st.session_state.inventory_df
-                    st.rerun()
+            nm = ca.number_input("通知ライン (目標値)", min_value=0.0, step=0.5, format="%g")
+            nu = cb.text_input("単位", value="個")
+            
+            if st.button("登録する", type="primary", use_container_width=True):
+                if not n_name.strip():
+                    st.error("⚠️ 商品名を入力してください。")
+                else:
+                    try:
+                        supabase.table("inventory").insert({
+                            "item_name": n_name, "category": f_cat, 
+                            "min_stock": float(nm), "unit": nu, "current_stock": 0.0
+                        }).execute()
+                        del st.session_state.inventory_df
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"⚠️ 登録に失敗しました: {e}")
+
+        st.divider()
+
+        # 2. 기존 아이템 편집/삭제 기능 (완전 복구)
+        if not st.session_state.inventory_df.empty:
+            cur_cats = sorted(st.session_state.inventory_df["category"].unique().tolist())
+            for cat in cur_cats:
+                with st.expander(f"📂 {cat}"):
+                    c_df = st.session_state.inventory_df[st.session_state.inventory_df["category"] == cat]
+                    for _, row in c_df.iterrows():
+                        rid = row["id"]
+                        ek = f"em_{rid}" # Edit mode 토글용 키
+                        if ek not in st.session_state: st.session_state[ek] = False
+                        
+                        # 보기 모드
+                        if not st.session_state[ek]:
+                            cc1, cc2 = st.columns([7, 3])
+                            cc1.markdown(f"**{row['item_name']}** <small>({fmt(row['min_stock'])}{row['unit']})</small>", unsafe_allow_html=True)
+                            if cc2.button("編集", key=f"e_{rid}", use_container_width=True):
+                                st.session_state[ek] = True
+                                st.rerun()
+                        # 편집 모드
+                        else:
+                            st.markdown("---")
+                            en = st.text_input("商品名", value=row["item_name"], key=f"n_{rid}")
+                            ec = st.selectbox("カテゴリ", options=cur_cats, index=cur_cats.index(row["category"]), key=f"c_{rid}")
+                            col_s1, col_s2 = st.columns(2)
+                            em = col_s1.number_input("目標値", value=float(row["min_stock"]), step=0.5, format="%g", key=f"m_{rid}")
+                            eu = col_s2.text_input("単位", value=row["unit"], key=f"u_{rid}")
+                            
+                            b1, b2, b3 = st.columns(3)
+                            if b1.button("💾 保存", key=f"s_{rid}", type="primary", use_container_width=True):
+                                supabase.table("inventory").update({
+                                    "item_name": en, "category": ec, 
+                                    "min_stock": float(em), "unit": eu
+                                }).eq("id", rid).execute()
+                                st.session_state[ek] = False
+                                del st.session_state.inventory_df
+                                st.rerun()
+                            if b2.button("🚫 取消", key=f"b_{rid}", use_container_width=True):
+                                st.session_state[ek] = False
+                                st.rerun()
+                            if b3.button("🗑️ 削除", key=f"d_{rid}", use_container_width=True):
+                                supabase.table("inventory").delete().eq("id", rid).execute()
+                                del st.session_state.inventory_df
+                                st.rerun()
+                        st.markdown("<hr style='margin:5px 0; opacity:0.1;'>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
