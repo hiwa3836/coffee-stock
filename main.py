@@ -20,7 +20,7 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (모바일 최적화 & 딥 네이비)
+# 1. UI 디자인 (모바일 1행 강제 배치 & 딥 네이비)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
@@ -37,30 +37,26 @@ def inject_custom_css():
         }
         .stTabs [aria-selected="true"] {
             background-color: #2563eb !important; color: #ffffff !important;
+            border: 2px solid #60a5fa !important;
         }
-
-        /* 모바일 가로 1행 유지 */
         [data-testid="column"] { width: fit-content !important; min-width: 0px !important; flex-basis: auto !important; }
         [data-testid="stHorizontalBlock"] {
             display: flex !important; flex-direction: row !important;
             flex-wrap: nowrap !important; align-items: center !important;
             justify-content: space-between !important;
         }
-
-        /* 수량 조절기 */
         div[data-testid="stNumberInput"] { width: 130px !important; margin-left: auto; }
         div[data-testid="stNumberInput"] button { width: 35px !important; height: 35px !important; background-color: #334155 !important; }
         div[data-testid="stNumberInput"] input { font-size: 1rem !important; }
-
         .stCaption { color: #94a3b8 !important; font-size: 0.8rem; white-space: nowrap; }
-        hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; }
+        hr { border-top: 1px solid #334155 !important; margin: 10px 0 !important; }
         .block-container { padding: 1rem 0.8rem !important; }
         #MainMenu, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 및 데이터 관리
+# 2. 로직 관리
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -98,7 +94,7 @@ def save_changes():
     st.rerun()
 
 # ==========================================
-# 3. 메인 UI
+# 3. 메인 화면
 # ==========================================
 def main():
     st.set_page_config(page_title="RCS在庫管理", layout="centered")
@@ -111,11 +107,11 @@ def main():
     with tab1:
         c1, c2 = st.columns([1, 1])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
-        selected_cat = c1.selectbox("카테고리", options=["すべて"] + all_cats, label_visibility="collapsed")
+        selected_cat = c1.selectbox("カテゴリ", options=["すべて"] + all_cats, label_visibility="collapsed")
         if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
             save_changes()
 
-        st.markdown("<hr style='margin-top:0;'>", unsafe_allow_html=True)
+        st.divider()
         df = st.session_state.inventory_df
         if selected_cat != "すべて": df = df[df["category"] == selected_cat]
         
@@ -123,11 +119,11 @@ def main():
             i_id = row["id"]
             val = st.session_state.edits.get(i_id, row["current_stock"])
             icon = "🔴" if val <= row["min_stock"] else "🟢"
-            col_text, col_input = st.columns([0.65, 0.35])
-            with col_text:
+            col_t, col_i = st.columns([0.65, 0.35])
+            with col_t:
                 st.markdown(f"**{icon} {row['item_name']}**")
                 st.caption(f"現:{row['current_stock']} / 目:{row['min_stock']}")
-            with col_input:
+            with col_i:
                 st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
                                 label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
             st.markdown("<hr>", unsafe_allow_html=True)
@@ -153,11 +149,10 @@ def main():
             if p3.button("➡️"): st.session_state.log_page = min(total_p, st.session_state.log_page + 1); st.rerun()
 
     with tab3:
-        st.subheader("⚙️ マ스타管理")
-        # 1. 신규 등록
-        with st.expander("➕ 新規登録", expanded=False):
+        st.subheader("⚙️ マスタ管理")
+        with st.expander("➕ 新規登録"):
             n_name = st.text_input("商品名")
-            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["コーヒー"]
+            ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["커피"]
             n_cat_s = st.selectbox("カテゴリ", options=ex_cats + ["(新規作成)"])
             f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名")
             ca, cb = st.columns(2)
@@ -165,10 +160,7 @@ def main():
             if st.button("登録", type="primary", use_container_width=True):
                 supabase.table("inventory").insert({"item_name": n_name, "category": f_cat, "min_stock": int(nm), "unit": nu, "current_stock": 0}).execute()
                 del st.session_state.inventory_df; st.rerun()
-
         st.divider()
-        
-        # 2. 기존 아이템 수정 (개선됨)
         if not st.session_state.inventory_df.empty:
             current_categories = sorted(st.session_state.inventory_df["category"].unique().tolist())
             for cat in current_categories:
@@ -177,31 +169,22 @@ def main():
                     for _, row in c_df.iterrows():
                         rid = row["id"]; ek = f"em_{rid}"
                         if ek not in st.session_state: st.session_state[ek] = False
-                        
                         if not st.session_state[ek]:
-                            # 평상시 모드
                             cc1, cc2 = st.columns([0.75, 0.25])
                             cc1.markdown(f"**{row['item_name']}** <small>({row['min_stock']}{row['unit']})</small>", unsafe_allow_html=True)
-                            if cc2.button("Edit", key=f"e_{rid}", use_container_width=True):
-                                st.session_state[ek] = True; st.rerun()
+                            if cc2.button("Edit", key=f"e_{rid}"): st.session_state[ek] = True; st.rerun()
                         else:
-                            # 컴팩트 편집 모드
-                            st.info(f"Editing: {row['item_name']}")
                             en = st.text_input("商品名", value=row["item_name"], key=f"n_{rid}")
-                            # 카테고리를 직접 입력이 아닌 기존 목록에서 선택
                             ec = st.selectbox("カテゴリ", options=current_categories, index=current_categories.index(row["category"]), key=f"c_{rid}")
-                            
-                            col_sub1, col_sub2 = st.columns(2)
-                            em = col_sub1.number_input("目安", value=int(row["min_stock"]), key=f"m_{rid}")
-                            eu = col_sub2.text_input("単位", value=row["unit"], key=f"u_{rid}")
-                            
+                            col_s1, col_s2 = st.columns(2)
+                            em = col_s1.number_input("目安", value=int(row["min_stock"]), key=f"m_{rid}")
+                            eu = col_s2.text_input("単位", value=row["unit"], key=f"u_{rid}")
                             b1, b2, b3 = st.columns([4, 3, 3])
-                            if b1.button("Save", key=f"s_{rid}", type="primary", use_container_width=True):
+                            if b1.button("Save", key=f"s_{rid}", type="primary"):
                                 supabase.table("inventory").update({"item_name": en, "category": ec, "min_stock": int(em), "unit": eu}).eq("id", rid).execute()
                                 st.session_state[ek] = False; del st.session_state.inventory_df; st.rerun()
-                            if b2.button("Cancel", key=f"b_{rid}", use_container_width=True):
-                                st.session_state[ek] = False; st.rerun()
-                            if b3.button("Del", key=f"d_{rid}", use_container_width=True):
+                            if b2.button("Can", key=f"b_{rid}"): st.session_state[ek] = False; st.rerun()
+                            if b3.button("Del", key=f"d_{rid}"):
                                 supabase.table("inventory").delete().eq("id", rid).execute()
                                 del st.session_state.inventory_df; st.rerun()
                         st.markdown("<hr style='margin:5px 0; opacity:0.1;'>", unsafe_allow_html=True)
