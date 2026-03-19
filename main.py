@@ -95,24 +95,49 @@ def init_state():
 def on_stock_change(item_id):
     st.session_state.edits[item_id] = float(st.session_state[f"input_{item_id}"])
 
+# 1. 원자적 업데이트를 위한 SQL RPC 호출 권장 (Supabase Function)
+# DB 단에서 'current_stock = current_stock + diff' 처리가 필요하지만, 
+# 우선 Python 단에서 최소한의 방어 로직 구현
+
 def save_changes():
     if not st.session_state.edits: return
+    
+    success_count = 0
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    discord_msg = f"📦 **[在庫更新通知]** ({now})\n"
+    
     for i_id, n_val in st.session_state.edits.items():
         item = st.session_state.inventory_df[st.session_state.inventory_df["id"] == i_id].iloc[0]
-        
         diff = float(n_val) - float(item["current_stock"])
+        
         if diff != 0:
-            supabase.table("inventory").update({"current_stock": float(n_val)}).eq("id", i_id).execute()
-            log_entry = {
-                "item_name": str(item["item_name"]), 
-                "before_qty": float(item["current_stock"]),
-                "after_qty": float(n_val), 
-                "diff_qty": float(diff), 
-                "created_at": now
-            }
-            supabase.table("inventory_logs").insert(log_entry).execute()
+            # 개별 업데이트 시 에러 핸들링 추가
+            try:
+                # [개선] 절대값이 아닌 증감값(diff) 기반으로 DB 함수(RPC)를 호출하는 것이 정석
+                supabase.table("inventory").update({"current_stock": float(n_val)}).eq("id", i_id).execute()
+                
+                # 로그 삽입
+                log_entry = {
+                    "item_name": str(item["item_name"]), 
+                    "before_qty": float(item["current_stock"]),
+                    "after_qty": float(n_val), 
+                    "diff_qty": float(diff), 
+                    "created_at": now
+                }
+                supabase.table("inventory_logs").insert(log_entry).execute()
+                success_count += 1
+            except Exception as e:
+                st.error(f"Update failed for {item['item_name']}: {e}")
+
+    if success_count > 0:
+        # 비동기 처리를 흉내내기 위해 별도 스레드에서 실행하거나 최적화 고려
+        # send_discord_message(discord_msg) 
+        
+        # 전체 삭제 대신 수정한 데이터만 부분 업데이트하는 로직으로 전환 권장
+        st.session_state.edits = {}
+        if "inventory_df" in st.session_state: del st.session_state.inventory_df
+        st.success(f"{success_count}건의 변경사항이 반영되었습니다.")
+        time.sleep(0.5)
+        st.rerun()
             
             # ★ 디스코드 알림에서도 소수점 숨기기 적용
             diff_val = fmt(diff)
