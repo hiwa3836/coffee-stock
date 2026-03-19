@@ -69,39 +69,88 @@ def on_stock_change(item_id):
 def save_changes():
     if not st.session_state.edits: return
     
-    success_count = 0
+    # [개선 1] 저장 직전, 변경하려는 아이템들의 '최신 재고'를 DB에서 실시간으로 다시 가져옴 (동시성 방어)
+    edited_ids = list(st.session_state.edits.keys())
+    try:
+        latest_res = supabase.table("inventory").select("id, current_stock, item_name").in_("id", edited_ids).execute()
+        latest_data = {row["id"]: row for row in latest_res.data}
+    except Exception as e:
+        st.error(f"⚠️ 最新データの取得に失敗しました: {e}")
+        return
+
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    discord_msg = f"📦 **[在庫更新通知]** ({now})\n"
+    discord_lines = []
     
+    # [개선 2] 매번 기록하지 않고 로그를 배열에 모아둠 (Bulk Insert용)
+    logs_to_insert = []
+    successful_ids = []
+
     for i_id, n_val in st.session_state.edits.items():
-        mask = st.session_state.inventory_df["id"] == i_id
-        item = st.session_state.inventory_df[mask].iloc[0]
-        diff = float(n_val) - float(item["current_stock"])
+        latest_item = latest_data.get(i_id)
+        if not latest_item: continue
+
+        # 내 캐시가 아닌 DB의 '진짜 최신값' 기준으로 계산
+        latest_stock = float(latest_item["current_stock"])
+        diff = float(n_val) - latest_stock
         
         if diff != 0:
             try:
+                # 1. 재고 업데이트 (원자적 트랜잭션 유지)
                 supabase.rpc("update_inventory_atomic", {
                     "p_id": int(i_id),
                     "p_new_stock": float(n_val),
                     "p_diff": float(diff),
-                    "p_item_name": str(item["item_name"]),
-                    "p_before_qty": float(item["current_stock"])
+                    "p_item_name": str(latest_item["item_name"]),
+                    "p_before_qty": latest_stock
                 }).execute()
                 
-                st.session_state.inventory_df.loc[mask, "current_stock"] = float(n_val)
+                # 2. 로그를 DB에 바로 안 넣고 배열에 모으기
+                logs_to_insert.append({
+                    "item_name": str(latest_item["item_name"]),
+                    "before_qty": latest_stock,
+                    "after_qty": float(n_val),
+                    "diff_qty": float(diff),
+                    "created_at": now
+                })
                 
+                # 3. 디스코드 메시지 조합
                 diff_str = f"+{fmt(diff)}" if diff > 0 else f"{fmt(diff)}"
-                discord_msg += f"> **{item['item_name']}**: {fmt(item['current_stock'])} → **{fmt(n_val)}** ({diff_str})\n"
-                success_count += 1
+                discord_lines.append(f"> **{latest_item['item_name']}**: {fmt(latest_stock)} → **{fmt(n_val)}** ({diff_str})")
+                
+                successful_ids.append(i_id)
             except Exception as e:
-                st.error(f"⚠️ {item['item_name']} の保存に失敗しました: {e}")
+                st.error(f"⚠️ {latest_item['item_name']} の保存に失敗しました: {e}")
+        else:
+            # 수정한 줄 알았는데 최신 DB값과 똑같다면 성공 처리 (목록에서 비우기 위해)
+            successful_ids.append(i_id)
 
-    if success_count > 0:
-        send_discord_message_async(discord_msg)
-        st.session_state.edits = {}
+    # [개선 2] 모아둔 로그를 한 번의 API 통신으로 통째로 저장 (병목 해결)
+    if logs_to_insert:
+        try:
+            supabase.table("inventory_logs").insert(logs_to_insert).execute()
+        except Exception as e:
+            st.error(f"⚠️ 履歴の保存に失敗しました: {e}")
+
+    # [개선 3] 전체 초기화가 아닌, '성공한 아이템'만 에디터에서 비우기 (부분 실패 복구)
+    for s_id in successful_ids:
+        st.session_state.edits.pop(s_id, None)
+
+    # 마무리가 하나라도 되었다면 리프레시 및 알림 전송
+    if successful_ids:
+        if discord_lines:
+            discord_msg = f"📦 **[在庫更新通知]** ({now})\n" + "\n".join(discord_lines)
+            send_discord_message_async(discord_msg)
+            
+        if "inventory_df" in st.session_state: del st.session_state.inventory_df
         if "logs_df" in st.session_state: del st.session_state.logs_df
-        st.success(f"✅ {success_count}件の在庫を更新しました。")
-        time.sleep(0.5)
+        
+        # 아직 edits에 항목이 남아있다면(실패한 것), 경고 표시
+        if not st.session_state.edits:
+            st.success(f"✅ すべての在庫を更新しました！")
+        else:
+            st.warning(f"⚠️ 一部のアイテムが保存できませんでした。入力欄を確認して再試行してください。")
+            
+        time.sleep(1)
         st.rerun()
 
 # ==========================================
@@ -164,7 +213,7 @@ def main():
     with tab3:
         st.subheader("⚙️ マスタデータ管理")
         
-        # 1. 신규 아이템 등록 (카테고리 선택/신규작성 복구)
+        # 1. 신규 아이템 등록
         with st.expander("➕ 新規アイテムの登録"):
             n_name = st.text_input("商品名")
             ex_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else ["コーヒー"]
@@ -191,7 +240,7 @@ def main():
 
         st.divider()
 
-        # 2. 기존 아이템 편집/삭제 기능 (완전 복구)
+        # 2. 기존 아이템 편집/삭제
         if not st.session_state.inventory_df.empty:
             cur_cats = sorted(st.session_state.inventory_df["category"].unique().tolist())
             for cat in cur_cats:
@@ -199,17 +248,15 @@ def main():
                     c_df = st.session_state.inventory_df[st.session_state.inventory_df["category"] == cat]
                     for _, row in c_df.iterrows():
                         rid = row["id"]
-                        ek = f"em_{rid}" # Edit mode 토글용 키
+                        ek = f"em_{rid}"
                         if ek not in st.session_state: st.session_state[ek] = False
                         
-                        # 보기 모드
                         if not st.session_state[ek]:
                             cc1, cc2 = st.columns([7, 3])
                             cc1.markdown(f"**{row['item_name']}** <small>({fmt(row['min_stock'])}{row['unit']})</small>", unsafe_allow_html=True)
                             if cc2.button("編集", key=f"e_{rid}", use_container_width=True):
                                 st.session_state[ek] = True
                                 st.rerun()
-                        # 편집 모드
                         else:
                             st.markdown("---")
                             en = st.text_input("商品名", value=row["item_name"], key=f"n_{rid}")
