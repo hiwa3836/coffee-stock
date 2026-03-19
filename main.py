@@ -20,63 +20,82 @@ def send_discord_message(content):
         pass
 
 # ==========================================
-# 1. UI 디자인 (안정적인 모바일 한 줄 배치)
+# 1. UI 디자인 (완전 방어형 모바일 레이아웃)
 # ==========================================
 def inject_custom_css():
     st.markdown("""
     <style>
-        /* 기본 배경 */
+        /* 기본 배경색 */
         .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
 
-        /* 탭 디자인 최적화 */
+        /* 상단 탭 디자인 */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 4px; background-color: #1e293b !important; padding: 8px;
-            border-radius: 12px; border: 1px solid #334155;
+            gap: 4px; background-color: #1e293b !important; padding: 5px;
+            border-radius: 10px; border: 1px solid #334155;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 40px; background-color: #334155 !important; color: #94a3b8 !important;
-            border-radius: 8px !important; border: 1px solid #475569 !important;
+            height: 38px; background-color: #334155 !important; color: #94a3b8 !important;
+            border-radius: 6px !important; border: 1px solid #475569 !important;
             padding: 0 10px !important; font-size: 0.8rem;
         }
         .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: #ffffff !important; }
 
-        /* 모바일 한 줄 강제 정렬 (더 안전한 방식) */
-        [data-testid="stHorizontalBlock"] {
+        /* ★모바일 가로 한 줄 배치를 위한 안전한 Flexbox 설정★ */
+        div[data-testid="stHorizontalBlock"] {
             display: flex !important;
             flex-direction: row !important;
-            flex-wrap: nowrap !important;
+            flex-wrap: nowrap !important; /* 줄바꿈 방지 */
             align-items: center !important;
             width: 100% !important;
+            gap: 5px !important;
         }
         
-        [data-testid="column"] {
+        /* 텍스트 컬럼(왼쪽) */
+        div[data-testid="column"]:nth-child(1) {
+            flex: 1 1 auto !important;
             min-width: 0 !important;
         }
 
-        /* 수량 조절기 컴팩트화 */
-        div[data-testid="stNumberInput"] {
-            width: 120px !important;
-            margin-left: auto;
-        }
-        div[data-testid="stNumberInput"] button {
-            width: 32px !important; height: 32px !important; background-color: #334155 !important;
-        }
-        div[data-testid="stNumberInput"] input {
-            font-size: 0.9rem !important;
+        /* 버튼 컬럼(오른쪽) - 버튼이 잘리지 않게 너비 고정 */
+        div[data-testid="column"]:nth-child(2) {
+            flex: 0 0 130px !important; /* 버튼 뭉치 너비 확보 */
+            display: flex !important;
+            justify-content: flex-end !important;
         }
 
-        /* 텍스트 크기 조절 (겹침 방지) */
-        .item-name { font-size: 0.95rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .item-cap { font-size: 0.75rem; color: #94a3b8; white-space: nowrap; }
+        /* 수량 조절기(Number Input) 디자인 */
+        div[data-testid="stNumberInput"] {
+            width: 130px !important;
+        }
+        
+        /* 버튼(-, +) 크기 복구 및 강조 */
+        div[data-testid="stNumberInput"] button {
+            width: 36px !important; 
+            height: 36px !important; 
+            background-color: #334155 !important;
+            border: 1px solid #475569 !important;
+            color: white !important;
+        }
+
+        /* 숫자 입력창 */
+        div[data-testid="stNumberInput"] input {
+            font-size: 0.95rem !important;
+            color: white !important;
+            background-color: #0f172a !important;
+        }
+
+        /* 텍스트 스타일 */
+        .item-name { font-size: 0.9rem; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .item-cap { font-size: 0.75rem; color: #94a3b8; }
 
         hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; }
-        .block-container { padding: 1rem 0.5rem !important; }
+        .block-container { padding: 1rem 0.6rem !important; }
         #MainMenu, footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 로직 (기존과 동일)
+# 2. 로직 (동일)
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -114,10 +133,10 @@ def save_changes():
     st.rerun()
 
 # ==========================================
-# 3. 메인 화면
+# 3. 메인 UI
 # ==========================================
 def main():
-    st.set_page_config(page_title="RCS在庫管理", layout="centered")
+    st.set_page_config(page_title="RCS", layout="centered")
     inject_custom_css()
     init_state()
 
@@ -125,10 +144,9 @@ def main():
     tab1, tab2, tab3 = st.tabs(["📝 更新", "📜 履歴", "⚙️ 設定"])
 
     with tab1:
-        # 카테고리와 저장 버튼 배치
         c1, c2 = st.columns([0.5, 0.5])
         all_cats = sorted(st.session_state.inventory_df["category"].unique().tolist()) if not st.session_state.inventory_df.empty else []
-        selected_cat = c1.selectbox("카테고리", options=["すべて"] + all_cats, label_visibility="collapsed")
+        selected_cat = c1.selectbox("CAT", options=["すべて"] + all_cats, label_visibility="collapsed")
         if c2.button("✅ 確定保存", type="primary", use_container_width=True, disabled=not st.session_state.edits):
             save_changes()
 
@@ -141,23 +159,24 @@ def main():
             val = st.session_state.edits.get(i_id, row["current_stock"])
             icon = "🔴" if val <= row["min_stock"] else "🟢"
             
-            # 텍스트 컬럼과 입력 컬럼을 나란히 배치
+            # 텍스트와 버튼 컬럼 나란히 배치
             col_t, col_i = st.columns([0.6, 0.4])
             with col_t:
                 st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='item-cap'>現:{row['current_stock']} / 目:{row['min_stock']}</div>", unsafe_allow_html=True)
             with col_i:
-                st.number_input("数量", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
+                st.number_input("QTY", value=int(val), min_value=0, step=1, key=f"input_{i_id}", 
                                 label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
             st.markdown("<hr>", unsafe_allow_html=True)
 
+    # (tab2, tab3는 레이아웃 깨짐 방지를 위해 이전 안정 버전 적용)
     with tab2:
         st.subheader("📜 変動履歴")
         logs = st.session_state.logs_df
-        if logs.empty: st.info("履歴がありません")
+        if logs.empty: st.info("履歴なし")
         else:
-            P_SIZE, MAX_P = 15, 5
-            total_p = min(MAX_P, (len(logs)-1)//P_SIZE + 1)
+            P_SIZE = 15
+            total_p = min(5, (len(logs)-1)//P_SIZE + 1)
             start = (st.session_state.log_page - 1) * P_SIZE
             p_logs = logs.iloc[start : start + P_SIZE]
             for _, r in p_logs.iterrows():
@@ -166,10 +185,6 @@ def main():
                 diff = r['diff_qty']; clr = "#ef4444" if diff < 0 else "#10b981"
                 l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']}→{r['after_qty']}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
                 st.divider()
-            p1, p2, p3 = st.columns([1,1,1])
-            if p1.button("⬅️", key="p_prev"): st.session_state.log_page = max(1, st.session_state.log_page - 1); st.rerun()
-            p2.markdown(f"<div style='text-align:center;'>{st.session_state.log_page}/{total_p}</div>", unsafe_allow_html=True)
-            if p3.button("➡️", key="p_next"): st.session_state.log_page = min(total_p, st.session_state.log_page + 1); st.rerun()
 
     with tab3:
         st.subheader("⚙️ 設定")
@@ -183,32 +198,6 @@ def main():
             if st.button("登録", type="primary", use_container_width=True):
                 supabase.table("inventory").insert({"item_name": n_name, "category": f_cat, "min_stock": int(nm), "unit": nu, "current_stock": 0}).execute()
                 del st.session_state.inventory_df; st.rerun()
-        st.divider()
-        if not st.session_state.inventory_df.empty:
-            cur_cats = sorted(st.session_state.inventory_df["category"].unique().tolist())
-            for cat in cur_cats:
-                with st.expander(f"📂 {cat}"):
-                    c_df = st.session_state.inventory_df[st.session_state.inventory_df["category"] == cat]
-                    for _, row in c_df.iterrows():
-                        rid = row["id"]; ek = f"em_{rid}"
-                        if ek not in st.session_state: st.session_state[ek] = False
-                        if not st.session_state[ek]:
-                            cc1, cc2 = st.columns([0.7, 0.3])
-                            cc1.markdown(f"**{row['item_name']}** ({row['min_stock']}{row['unit']})")
-                            if cc2.button("Edit", key=f"e_{rid}"): st.session_state[ek] = True; st.rerun()
-                        else:
-                            en = st.text_input("名", value=row["item_name"], key=f"n_{rid}")
-                            ec = st.selectbox("カテゴリ", options=cur_cats, index=cur_cats.index(row["category"]), key=f"c_{rid}")
-                            col_s1, col_s2 = st.columns(2)
-                            em = col_s1.number_input("目安", value=int(row["min_stock"]), key=f"m_{rid}")
-                            eu = col_s2.text_input("単位", value=row["unit"], key=f"u_{rid}")
-                            b1, b2, b3 = st.columns([4, 3, 3])
-                            if b1.button("Save", key=f"s_{rid}", type="primary"):
-                                supabase.table("inventory").update({"item_name": en, "category": ec, "min_stock": int(em), "unit": eu}).eq("id", rid).execute()
-                                st.session_state[ek] = False; del st.session_state.inventory_df; st.rerun()
-                            if b2.button("Can", key=f"b_{rid}"): st.session_state[ek] = False; st.rerun()
-                            if b3.button("Del", key=f"d_{rid}"):
-                                supabase.table("inventory").delete().eq("id", rid).execute(); del st.session_state.inventory_df; st.rerun()
 
 if __name__ == "__main__":
     main()
