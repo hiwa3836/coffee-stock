@@ -19,6 +19,11 @@ def send_discord_message(content):
     except Exception:
         pass
 
+# ★ 숫자를 예쁘게 만들어주는 마법의 함수 (3.0 -> 3 / 3.5 -> 3.5)
+def fmt(val):
+    v = float(val)
+    return int(v) if v.is_integer() else v
+
 # ==========================================
 # 1. UI デザイン (検索窓 & 折りたたみカテゴリ)
 # ==========================================
@@ -37,7 +42,6 @@ def inject_custom_css():
         }
         .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: white !important; }
 
-        /* モバイル1行レイアウト維持 (在庫リストのみ) */
         @media (max-width: 768px) {
             div[data-testid="stHorizontalBlock"]:has(.item-name) {
                 flex-direction: row !important;
@@ -52,10 +56,8 @@ def inject_custom_css():
             }
         }
 
-        /* 検索ボックスや入力欄の背景色 */
         div[data-baseweb="input"] > div { background-color: #0f172a !important; }
 
-        /* ★ Expander (折りたたみ) のデザイン最適化 ★ */
         [data-testid="stExpander"] {
             background-color: #1e293b !important;
             border-radius: 10px !important;
@@ -91,7 +93,6 @@ def init_state():
     if "log_page" not in st.session_state: st.session_state.log_page = 1
 
 def on_stock_change(item_id):
-    # ★ 小数点(float)として値を取得するように変更
     st.session_state.edits[item_id] = float(st.session_state[f"input_{item_id}"])
 
 def save_changes():
@@ -100,7 +101,7 @@ def save_changes():
     discord_msg = f"📦 **[在庫更新通知]** ({now})\n"
     for i_id, n_val in st.session_state.edits.items():
         item = st.session_state.inventory_df[st.session_state.inventory_df["id"] == i_id].iloc[0]
-        # ★ 変動値の計算を小数対応に
+        
         diff = float(n_val) - float(item["current_stock"])
         if diff != 0:
             supabase.table("inventory").update({"current_stock": float(n_val)}).eq("id", i_id).execute()
@@ -112,8 +113,11 @@ def save_changes():
                 "created_at": now
             }
             supabase.table("inventory_logs").insert(log_entry).execute()
-            diff_str = f"+{diff:.1f}" if diff > 0 else f"{diff:.1f}"
-            discord_msg += f"> **{item['item_name']}**: {item['current_stock']} → **{n_val}** ({diff_str})\n"
+            
+            # ★ 디스코드 알림에서도 소수점 숨기기 적용
+            diff_val = fmt(diff)
+            diff_str = f"+{diff_val}" if diff_val > 0 else f"{diff_val}"
+            discord_msg += f"> **{item['item_name']}**: {fmt(item['current_stock'])} → **{fmt(n_val)}** ({diff_str})\n"
     
     send_discord_message(discord_msg)
     st.session_state.edits = {}
@@ -134,7 +138,7 @@ def main():
     st.title("📦 RCSシステム")
     tab1, tab2, tab3 = st.tabs(["📝 在庫更新", "📜 変更履歴", "⚙️ 管理設定"])
 
-    # --- TAB 1: 在庫更新 (検索機能 & 折りたたみ) ---
+    # --- TAB 1: 在庫更新 ---
     with tab1:
         search_query = st.text_input("🔍 検索", placeholder="🔍 商品名・カテゴリで検索 (入力後Enter)...", label_visibility="collapsed")
         
@@ -167,22 +171,21 @@ def main():
                 c_df = df[df["category"] == cat]
                 for _, row in c_df.iterrows():
                     i_id = row["id"]
-                    # ★ デフォルト値を小数で取得
                     val = float(st.session_state.edits.get(i_id, row["current_stock"]))
                     icon = "🔴" if val <= float(row["min_stock"]) else "🟢"
                     
                     col_t, col_i = st.columns([6, 4])
                     with col_t:
                         st.markdown(f"<div class='item-name'>{icon} {row['item_name']}</div>", unsafe_allow_html=True)
-                        st.markdown(f"<div class='item-cap'>現在:{row['current_stock']} / 目標:{row['min_stock']} {row['unit']}</div>", unsafe_allow_html=True)
+                        # ★ 리스트에 표시될 때도 예쁜 숫자로 (fmt 적용)
+                        st.markdown(f"<div class='item-cap'>現在:{fmt(row['current_stock'])} / 目標:{fmt(row['min_stock'])} {row['unit']}</div>", unsafe_allow_html=True)
                     with col_i:
-                        # ★ inputを小数(0.5単位)に変更
                         st.number_input(
                             "数量", 
                             value=val, 
                             min_value=0.0, 
-                            step=0.5,           # ★ ここが0.5単位の鍵！
-                            format="%.1f",      # ★ 小数第1位まで表示
+                            step=0.5,           
+                            format="%g",        # ★ 핵심! 입력창 안의 숫자를 3.0이 아닌 3으로 보여주는 마법 (%g)
                             key=f"input_{i_id}", 
                             label_visibility="collapsed", 
                             on_change=on_stock_change, 
@@ -203,8 +206,11 @@ def main():
             for _, r in p_logs.iterrows():
                 l1, l2 = st.columns([6, 4])
                 l1.markdown(f"**{r['item_name']}**<br><small>{r['created_at']}</small>", unsafe_allow_html=True)
-                diff = float(r['diff_qty']); clr = "#ef4444" if diff < 0 else "#10b981"
-                l2.markdown(f"<div style='text-align:right;'><small>{r['before_qty']} → {r['after_qty']}</small><br><b style='color:{clr};'>{'+' if diff > 0 else ''}{diff}</b></div>", unsafe_allow_html=True)
+                
+                # ★ 히스토리에서도 예쁜 숫자로 보이게 적용
+                diff_val = fmt(r['diff_qty'])
+                clr = "#ef4444" if diff_val < 0 else "#10b981"
+                l2.markdown(f"<div style='text-align:right;'><small>{fmt(r['before_qty'])} → {fmt(r['after_qty'])}</small><br><b style='color:{clr};'>{'+' if diff_val > 0 else ''}{diff_val}</b></div>", unsafe_allow_html=True)
                 st.divider()
 
     # --- TAB 3: 管理設定 ---
@@ -216,7 +222,7 @@ def main():
             n_cat_s = st.selectbox("カテゴリ選択", options=ex_cats + ["(新規作成)"])
             f_cat = n_cat_s if n_cat_s != "(新規作成)" else st.text_input("新規カテゴリ名を入力")
             ca, cb = st.columns(2)
-            nm = ca.number_input("通知目安(目標値)", min_value=0.0, step=0.5, format="%.1f") # ★ ここも小数対応
+            nm = ca.number_input("通知目安(目標値)", min_value=0.0, step=0.5, format="%g") # ★ 여기도 적용
             nu = cb.text_input("単位", value="個")
             
             if st.button("登録する", type="primary", use_container_width=True):
@@ -226,7 +232,7 @@ def main():
                     try:
                         supabase.table("inventory").insert({
                             "item_name": n_name, "category": f_cat, 
-                            "min_stock": float(nm), "unit": nu, "current_stock": 0.0 # ★ 初期値を0.0に
+                            "min_stock": float(nm), "unit": nu, "current_stock": 0.0
                         }).execute()
                         del st.session_state.inventory_df; st.rerun()
                     except Exception as e:
@@ -244,7 +250,7 @@ def main():
                         
                         if not st.session_state[ek]:
                             cc1, cc2 = st.columns([7, 3])
-                            cc1.markdown(f"**{row['item_name']}** <small>({row['min_stock']}{row['unit']})</small>", unsafe_allow_html=True)
+                            cc1.markdown(f"**{row['item_name']}** <small>({fmt(row['min_stock'])}{row['unit']})</small>", unsafe_allow_html=True)
                             if cc2.button("編集", key=f"e_{rid}", use_container_width=True):
                                 st.session_state[ek] = True; st.rerun()
                         else:
@@ -252,7 +258,7 @@ def main():
                             en = st.text_input("商品名", value=row["item_name"], key=f"n_{rid}")
                             ec = st.selectbox("カテゴリ", options=cur_cats, index=cur_cats.index(row["category"]), key=f"c_{rid}")
                             col_s1, col_s2 = st.columns(2)
-                            em = col_s1.number_input("目安", value=float(row["min_stock"]), step=0.5, format="%.1f", key=f"m_{rid}") # ★ 小数対応
+                            em = col_s1.number_input("目安", value=float(row["min_stock"]), step=0.5, format="%g", key=f"m_{rid}")
                             eu = col_s2.text_input("単位", value=row["unit"], key=f"u_{rid}")
                             
                             b1, b2, b3 = st.columns(3)
