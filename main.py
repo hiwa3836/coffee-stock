@@ -1,59 +1,15 @@
 import streamlit as st
 import pandas as pd
 import time
-import requests
-import threading
-import io  # 엑셀 다운로드를 위한 메모리 버퍼 용도
 from datetime import datetime
-from supabase import create_client, Client
+
+# 쪼개놓은 파일들에서 기능 가져오기
+from database import supabase
+from styles import inject_custom_css
+from utils import fmt, send_discord_message_async, generate_current_stock_excel, generate_logs_excel
 
 # ==========================================
-# ⚙️ システム設定 (Secrets)
-# ==========================================
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-BOT_SERVER_URL = "https://coffee-stock.onrender.com/send_alert"
-
-def send_discord_message_async(content):
-    def task():
-        try:
-            requests.post(BOT_SERVER_URL, json={"message": content}, timeout=3)
-        except Exception: pass
-    threading.Thread(target=task, daemon=True).start()
-
-def fmt(val):
-    v = float(val)
-    return int(v) if v.is_integer() else v
-
-# ==========================================
-# 1. UI デザイン (CSS)
-# ==========================================
-def inject_custom_css():
-    st.markdown("""
-    <style>
-        .stApp { background-color: #0f172a !important; color: #f1f5f9 !important; }
-        .stTabs [data-baseweb="tab-list"] { gap: 5px; background-color: #1e293b !important; padding: 5px; border-radius: 10px; }
-        .stTabs [data-baseweb="tab"] { height: 40px; background-color: #334155 !important; color: #94a3b8 !important; font-size: 0.85rem; padding: 0 12px !important; border-radius: 6px !important; font-weight: bold; }
-        .stTabs [aria-selected="true"] { background-color: #2563eb !important; color: white !important; }
-        @media (max-width: 768px) {
-            div[data-testid="stHorizontalBlock"]:has(.item-name) { flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; }
-            div[data-testid="stHorizontalBlock"]:has(.item-name) > div:nth-child(1) { width: 55% !important; flex: 1 1 55% !important; min-width: 0 !important; }
-            div[data-testid="stHorizontalBlock"]:has(.item-name) > div:nth-child(2) { width: 45% !important; flex: 1 1 45% !important; min-width: 120px !important; }
-        }
-        div[data-baseweb="input"] > div { background-color: #0f172a !important; }
-        [data-testid="stExpander"] { background-color: #1e293b !important; border-radius: 10px !important; border: 1px solid #334155 !important; margin-bottom: 8px !important; }
-        [data-testid="stExpander"] summary p { font-weight: bold !important; color: #60a5fa !important; font-size: 0.95rem !important; }
-        .item-name { font-size: 0.95rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .item-cap { font-size: 0.75rem; color: #94a3b8; }
-        hr { border-top: 1px solid #334155 !important; margin: 8px 0 !important; opacity: 0.5; }
-        .block-container { padding: 1.5rem 0.6rem !important; }
-        #MainMenu, footer {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
-
-# ==========================================
-# 2. ロジック管理 (RPC)
+# 1. ロジック管理 (상태 관리 및 저장 로직)
 # ==========================================
 def init_state():
     if "inventory_df" not in st.session_state:
@@ -80,7 +36,6 @@ def save_changes():
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     discord_lines = []
-    
     logs_to_insert = []
     successful_ids = []
 
@@ -111,7 +66,6 @@ def save_changes():
                 
                 diff_str = f"+{fmt(diff)}" if diff > 0 else f"{fmt(diff)}"
                 discord_lines.append(f"> **{latest_item['item_name']}**: {fmt(latest_stock)} → **{fmt(n_val)}** ({diff_str})")
-                
                 successful_ids.append(i_id)
             except Exception as e:
                 st.error(f"⚠️ {latest_item['item_name']} の保存に失敗しました: {e}")
@@ -144,7 +98,7 @@ def save_changes():
         st.rerun()
 
 # ==========================================
-# 3. メイン UI
+# 2. メイン UI (화면 구성)
 # ==========================================
 def main():
     st.set_page_config(page_title="RCS 在庫管理システム", layout="centered")
@@ -185,72 +139,30 @@ def main():
                     i.number_input("数量", value=val, step=0.5, format="%g", key=f"input_{i_id}", label_visibility="collapsed", on_change=on_stock_change, args=(i_id,))
                     st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
 
-# --- TAB 2: 変更履歴 (Excel ダウンロード機能追加) ---
+    # --- TAB 2: 変更履歴 (Excel 버튼이 엄청나게 깔끔해짐!) ---
     with tab2:
         st.subheader("📜 直近の変更履歴 (最新15件)")
         
-        # 엑셀 다운로드 버튼을 양옆으로 나란히 배치하기 위해 화면을 반으로 나눕니다.
         col_dl1, col_dl2 = st.columns(2)
         
-        # ----------------------------------------------------
-        # 1. 왼쪽 버튼: [현재 재고 데이터] 엑셀 다운로드
-        # ----------------------------------------------------
-        inv_df = st.session_state.inventory_df
-        if not inv_df.empty:
-            inv_buffer = io.BytesIO()
-            inv_export = inv_df[['category', 'item_name', 'current_stock', 'min_stock', 'unit']].copy()
-            
-            # 컬럼명을 보기 좋은 일본어로 변경
-            inv_export = inv_export.rename(columns={
-                'category': 'カテゴリ',
-                'item_name': '商品名',
-                'current_stock': '現在在庫',
-                'min_stock': '目標値',
-                'unit': '単位'
-            })
-            
-            with pd.ExcelWriter(inv_buffer, engine='openpyxl') as writer:
-                inv_export.to_excel(writer, index=False, sheet_name='現在在庫')
-                
+        # 1. 現在の在庫 DL 버튼
+        if not st.session_state.inventory_df.empty:
             with col_dl1:
                 st.download_button(
-                    label="📦 現在の在庫データをDL",  # 현재 재고 다운로드
-                    data=inv_buffer.getvalue(),
+                    label="📦 現在の在庫データをDL",
+                    data=generate_current_stock_excel(st.session_state.inventory_df), # utils.py의 함수 호출!
                     file_name=f"Current_Stock_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
 
-        # ----------------------------------------------------
-        # 2. 오른쪽 버튼: [과거 변경 이력] 엑셀 다운로드
-        # ----------------------------------------------------
+        # 2. 変更履歴 DL 버튼
         logs = st.session_state.logs_df
         if not logs.empty:
-            log_buffer = io.BytesIO()
-            log_export = logs.copy()
-            
-            # 날짜 포맷 안전하게 변환
-            log_export['created_at'] = pd.to_datetime(
-                log_export['created_at'], errors='coerce', utc=True
-            ).dt.strftime('%Y-%m-%d %H:%M:%S')
-            
-            # 컬럼명을 일본어로 변경
-            log_export = log_export.rename(columns={
-                'created_at': '変更日時',
-                'item_name': '商品名',
-                'before_qty': '変更前',
-                'after_qty': '変更後',
-                'diff_qty': '変動量'
-            })
-            log_export = log_export[['変更日時', '商品名', '変更前', '変更後', '変動量']]
-            
-            with pd.ExcelWriter(log_buffer, engine='openpyxl') as writer:
-                log_export.to_excel(writer, index=False, sheet_name='変更履歴')
-                
             with col_dl2:
                 st.download_button(
-                    label="📥 履歴データをDL",  # 이력 데이터 다운로드
-                    data=log_buffer.getvalue(),
+                    label="📥 履歴データをDL",
+                    data=generate_logs_excel(logs), # utils.py의 함수 호출!
                     file_name=f"Inventory_Logs_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
@@ -258,9 +170,6 @@ def main():
         
         st.markdown("<hr style='margin-top: 10px; margin-bottom: 15px;'>", unsafe_allow_html=True)
 
-        # ----------------------------------------------------
-        # 화면에는 최신 15건만 표시 (기존과 동일)
-        # ----------------------------------------------------
         if logs.empty:
             st.info("表示可能な履歴がありません。")
         else:
