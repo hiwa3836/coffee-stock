@@ -5,9 +5,9 @@ from flask import Flask
 import threading
 import os
 import logging
-import time  # 무한 루프 방지용 대기 모듈 추가 (無限ループ防止用)
+import time
 
-# --- 0. ログ設定 (エラー原因をひと目で確認するため) ---
+# --- 0. ログ設定 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- 1. セキュリティ設定 (環境変数) ---
@@ -15,7 +15,6 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 TOKEN = os.environ.get("DISCORD_TOKEN")
 
-# チャンネルIDが存在しない場合に備えてデフォルト値を設定し、例外処理を適用
 try:
     CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "1483110205184278679"))
 except ValueError:
@@ -26,21 +25,24 @@ try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     logging.info("✅ Supabaseクライアントの準備完了")
 except Exception as e:
-    logging.error(f"❌ Supabase設定エラー（キーを確認してください）: {e}")
+    logging.error(f"❌ Supabase設定エラー: {e}")
 
-# --- 2. Flaskサーバー (Renderのポートチェック通過用) ---
+# --- 2. Flaskサーバー (Renderポート監視用) ---
 app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    # Renderがヘルスチェックを行う際に応答するエンドポイント
     return "Bot is Online!", 200
 
 def run_flask():
-    port = int(os.environ.get("PORT", 10000)) 
-    logging.info(f"🌐 Flaskポート監視サーバーの稼働準備完了 (ポート: {port})")
-    # 🔥 最適化のポイント: スレッド内で実行する場合は use_reloader=False が必須（競合防止）
-    app.run(host='0.0.0.0', port=port, use_reloader=False)
+    # Renderは環境変数 PORT (通常10000) を使用します
+    port = int(os.environ.get("PORT", 10000))
+    logging.info(f"🌐 Flaskサーバーを起動します (Port: {port})")
+    try:
+        # use_reloader=False はスレッド実行時に必須
+        app.run(host='0.0.0.0', port=port, use_reloader=False)
+    except Exception as e:
+        logging.error(f"❌ Flaskサーバー起動エラー: {e}")
 
 # --- 3. Discord Botの設定 ---
 intents = discord.Intents.default()
@@ -49,29 +51,32 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
 async def on_ready():
-    logging.info(f'🤖 Discord Botのログインに成功しました: {bot.user}')
+    logging.info(f'🤖 Discord Bot ログイン成功: {bot.user}')
 
-# (注意: ここに !在庫, !不足 など、使用していたコマンド関数をそのまま貼り付けてください)
-
-
-# --- 4. 実行部 (最重要) ---
+# --- 4. 実行部 (Render最適化済み) ---
 if __name__ == "__main__":
     if not TOKEN:
-        logging.error("❌ DISCORD_TOKENが空です。Renderの[Environment]を確認してください。")
+        logging.error("❌ DISCORD_TOKENが見つかりません。")
     else:
-        # 1. Renderにポートエラーを出される前に、Flaskを最優先で起動する
+        # [STEP 1] Flaskを別スレッドで先に起動
         flask_thread = threading.Thread(target=run_flask, daemon=True)
         flask_thread.start()
         
-        # 2. その後、Discord Botのログインを試行する
-        logging.info("⏳ Discordサーバーへの接続を試行しています...")
+        # [STEP 2] Renderがポートを認識するまで5秒待機 (重要)
+        logging.info("⏳ ポートの疎通を確認するため、5秒間待機します...")
+        time.sleep(5)
+        
+        # [STEP 3] Discord Botの起動を試行
+        logging.info("🚀 Discordサーバーへの接続を開始します...")
         try:
             bot.run(TOKEN)
         except discord.errors.HTTPException as e:
-            # Discord側のIPブロック（429/1015エラー）発生時の処理
-            logging.error(f"🚨 Discordへの接続がブロックされました（1015エラー等）: {e}")
-            logging.info("⚠️ Renderによる即時再起動（無限ループ）を防ぐため、15分間待機します...")
-            time.sleep(900)  # 15분 대기 (차단 해제 유도 및 Render 강제 재시작 방지)
+            # 1015エラー (Rate Limit) 発生時の無限再起動防止
+            logging.error(f"🚨 Discord接続拒否 (Rate Limit / 1015): {e}")
+            logging.info("⚠️ IP制限を回避するため、15分間待機してプロセスを維持します...")
+            # プロセスを終了させず維持することで Render の強制再起動ループを防ぐ
+            while True:
+                time.sleep(60)
         except Exception as e:
-            logging.error(f"❌ 不明なBot実行エラー: {e}")
-            time.sleep(60)   # 기타 에러 시 1분 대기
+            logging.error(f"❌ 予期せぬエラーが発生しました: {e}")
+            time.sleep(60)
