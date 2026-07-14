@@ -1,7 +1,0 @@
-streamlit
-pandas
-supabase
-requests
-openpyxl
-discord.py
-flask
