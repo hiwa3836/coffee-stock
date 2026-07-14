@@ -2,50 +2,284 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>RCS 在庫管理</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { background: #0f172a; color: #f1f5f9; font-family: sans-serif; padding: 15px; }
-        .item-card { background: #1e293b; padding: 15px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #334155; }
-        .quick-btn { background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 4px; margin-right: 4px; }
-        .save-btn { background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; width: 100%; margin-top: 8px; font-weight: bold; }
-        input[type="number"], input[type="text"] { background: #0f172a; color: white; border: 1px solid #475569; padding: 8px; border-radius: 4px; }
+        body {
+            background-color: #0f172a;
+            color: #f1f5f9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 16px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tab-container {
+            display: flex;
+            gap: 8px;
+            background-color: #1e293b;
+            padding: 6px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            padding: 10px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background-color: #2563eb;
+            color: white;
+        }
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .item-title {
+            font-size: 1.05rem;
+            font-weight: bold;
+        }
+        .item-meta {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+        .input-group {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+        input[type="number"] {
+            background-color: #0f172a;
+            color: #f1f5f9;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 8px;
+            width: 70px;
+            font-size: 1rem;
+            text-align: center;
+        }
+        .btn {
+            background-color: #334155;
+            color: #f1f5f9;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        .btn:active {
+            background-color: #475569;
+        }
+        .btn-primary {
+            background-color: #2563eb;
+        }
+        .btn-primary:active {
+            background-color: #1d4ed8;
+        }
+        .btn-success {
+            background-color: #10b981;
+            width: 100%;
+            padding: 10px;
+            font-size: 0.95rem;
+        }
+        .btn-success:active {
+            background-color: #059669;
+        }
+        input[type="text"] {
+            background-color: #0f172a;
+            color: #f1f5f9;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 8px 12px;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+        .badge-low {
+            background-color: #ef4444;
+            color: white;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .badge-ok {
+            background-color: #10b981;
+            color: white;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .hidden {
+            display: none;
+        }
+        .log-item {
+            border-bottom: 1px solid #334155;
+            padding: 12px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .log-item:last-child {
+            border-bottom: none;
+        }
+        .log-meta {
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+        .log-diff-plus {
+            color: #10b981;
+            font-weight: bold;
+        }
+        .log-diff-minus {
+            color: #ef4444;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
-    <h3 style="margin-top: 0;">📦 RCS 在庫管理 (高速版)</h3>
-    <div id="inventory-list">読み込み中...</div>
+    <div class="container">
+        <h1>📦 RCS 在庫管理</h1>
+        
+        <div class="tab-container">
+            <button class="tab-btn active" id="tab-update-btn" onclick="switchTab('update')">📝 在庫更新</button>
+            <button class="tab-btn" id="tab-history-btn" onclick="switchTab('history')">📜 変更履歴</button>
+        </div>
+
+        <div id="tab-update">
+            <div id="inventory-list">読み込み中...</div>
+        </div>
+
+        <div id="tab-history" class="hidden">
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <button class="btn" style="flex: 1;" onclick="exportCSV('current')">📦 現在の在庫DL (CSV)</button>
+                <button class="btn" style="flex: 1;" onclick="exportCSV('history')">📥 履歴データDL (CSV)</button>
+            </div>
+            <div id="history-list">読み込み中...</div>
+        </div>
+    </div>
 
     <script>
-        // 여기에 Supabase 정보를 입력합니다.
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-        const SUPABASE_KEY = 'YOUR_ANON_KEY';
+        const SUPABASE_URL = 'https://lrfkixsnphbumcwmthym.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_2T2r36oe1SVs3mxk-DQ9SA_9JPh8Ki0';
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let inventoryData = [];
+        let logsData = [];
+
+        function switchTab(tab) {
+            document.getElementById('tab-update-btn').classList.remove('active');
+            document.getElementById('tab-history-btn').classList.remove('active');
+            document.getElementById('tab-update').classList.add('hidden');
+            document.getElementById('tab-history').classList.add('hidden');
+
+            if (tab === 'update') {
+                document.getElementById('tab-update-btn').classList.add('active');
+                document.getElementById('tab-update').classList.remove('hidden');
+                loadInventory();
+            } else {
+                document.getElementById('tab-history-btn').classList.add('active');
+                document.getElementById('tab-history').classList.remove('hidden');
+                loadHistory();
+            }
+        }
 
         async function loadInventory() {
             const { data, error } = await supabase.from('inventory').select('*').order('id');
-            if (error) return alert('エラー: ' + error.message);
+            if (error) return alert('データロード失敗: ' + error.message);
+            inventoryData = data;
             
             const list = document.getElementById('inventory-list');
-            list.innerHTML = data.map(item => `
-                <div class="item-card">
-                    <div style="font-weight: bold; margin-bottom: 8px;">${item.item_name} <span style="font-size: 0.8em; color: #94a3b8;">(現在: ${item.current_stock}${item.unit})</span></div>
-                    
-                    <div style="display: flex; gap: 5px; margin-bottom: 8px; align-items: center;">
-                        <input type="number" id="input_${item.id}" value="${item.current_stock}" step="0.1" style="width: 70px;">
-                        <button class="quick-btn" onclick="addStock(${item.id}, 0.33)">+1/3</button>
-                        <button class="quick-btn" onclick="addStock(${item.id}, 0.5)">+1/2</button>
-                        <button class="quick-btn" onclick="addStock(${item.id}, 1)">+1</button>
+            list.innerHTML = data.map(item => {
+                const isLow = parseFloat(item.current_stock) <= parseFloat(item.min_stock);
+                const badge = isLow ? '<span class="badge-low">부족</span>' : '<span class="badge-ok">여유</span>';
+                return `
+                    <div class="card">
+                        <div class="item-header">
+                            <div>
+                                <span class="item-title">${item.item_name}</span>
+                                <div class="item-meta">현재: ${item.current_stock} / 목표: ${item.min_stock} ${item.unit}</div>
+                            </div>
+                            ${badge}
+                        </div>
+                        
+                        <div class="input-group">
+                            <input type="number" id="input_${item.id}" value="${item.current_stock}" step="0.1">
+                            <button class="btn" onclick="adjustStock(${item.id}, 0.33)">+1/3</button>
+                            <button class="btn" onclick="adjustStock(${item.id}, 0.5)">+1/2</button>
+                            <button class="btn" onclick="adjustStock(${item.id}, 1)">+1</button>
+                        </div>
+                        
+                        <input type="text" id="note_${item.id}" placeholder="변경 메모 (예: 출점용 소비, 2/3 남음)">
+                        <button class="btn btn-primary btn-success" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock})">💾 저장하기</button>
                     </div>
-                    
-                    <input type="text" id="note_${item.id}" placeholder="メモ (例: 出店用消費)" style="width: 100%; box-sizing: border-box; margin-bottom: 8px;">
-                    <button class="save-btn" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock})">💾 確定保存</button>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
-        function addStock(id, amount) {
+        async function loadHistory() {
+            const { data, error } = await supabase.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(20);
+            if (error) return alert('履歴ロード失敗: ' + error.message);
+            logsData = data;
+
+            const list = document.getElementById('history-list');
+            if (data.length === 0) {
+                list.innerHTML = '<p style="text-align:center; color:#94a3b8;">表示 가능한 이력이 없습니다.</p>';
+                return;
+            }
+            list.innerHTML = data.map(r => {
+                const diff = parseFloat(r.diff_qty);
+                const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
+                const diffClass = diff > 0 ? 'log-diff-plus' : 'log-diff-minus';
+                const noteStr = r.note ? `<br><small style="color:#60a5fa;">📝 ${r.note}</small>` : '';
+                return `
+                    <div class="log-item">
+                        <div>
+                            <strong>${r.item_name}</strong>${noteStr}
+                            <div class="log-meta">${new Date(r.created_at).toLocaleString('ja-JP')}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <small>${r.before_qty} → ${r.after_qty}</small>
+                            <div class="${diffClass}">${diffStr}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function adjustStock(id, amount) {
             const input = document.getElementById(`input_${id}`);
             input.value = (parseFloat(input.value) + amount).toFixed(2);
         }
@@ -55,15 +289,52 @@
             const note = document.getElementById(`note_${id}`).value;
             const diff = newQty - beforeQty;
 
-            if (diff === 0 && !note) return alert('変更がありません。');
+            if (diff === 0 && !note) {
+                alert('변경된 수량이나 메모가 없습니다.');
+                return;
+            }
 
-            await supabase.from('inventory').update({ current_stock: newQty }).eq('id', id);
-            await supabase.from('inventory_logs').insert([{
-                item_name: name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
+            const { error: updateError } = await supabase.from('inventory').update({ current_stock: newQty }).eq('id', id);
+            if (updateError) return alert('재고 수정 실패: ' + updateError.message);
+
+            const { error: logError } = await supabase.from('inventory_logs').insert([{
+                item_name: name,
+                before_qty: beforeQty,
+                after_qty: newQty,
+                diff_qty: diff,
+                note: note
             }]);
-            
-            alert('✅ 保存完了！');
+            if (logError) return alert('이력 저장 실패: ' + logError.message);
+
+            alert('✅ 저장 완료!');
             loadInventory();
+        }
+
+        function exportCSV(type) {
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            if (type === 'current') {
+                csvContent += "商品名,現在在庫,目標値,単位\n";
+                inventoryData.forEach(r => {
+                    csvContent += `"${r.item_name}",${r.current_stock},${r.min_stock},"${r.unit}"\n`;
+                });
+                triggerDownload(csvContent, `current_stock_${new Date().toISOString().slice(0,10)}.csv`);
+            } else {
+                csvContent += "時間,商品名,変更前,変更後,変動量,メモ\n";
+                logsData.forEach(r => {
+                    csvContent += `"${r.created_at}","${r.item_name}",${r.before_qty},${r.after_qty},${r.diff_qty},"${r.note || ''}"\n`;
+                });
+                triggerDownload(csvContent, `inventory_logs_${new Date().toISOString().slice(0,10)}.csv`);
+            }
+        }
+
+        function triggerDownload(content, fileName) {
+            const encodedUri = encodeURI(content);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         loadInventory();
