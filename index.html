@@ -23,14 +23,14 @@
         .cat-badge { background-color: #334155; color: #cbd5e1; font-size: 0.75rem; padding: 3px 6px; border-radius: 4px; font-weight: normal; }
         .item-meta { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
         
-        .stepper-group { display: flex; align-items: center; margin-bottom: 12px; }
+        .stepper-group { display: flex; align-items: center; margin-bottom: 0px; }
         .stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .stepper-btn:active { background-color: #475569; }
         .stepper-input { flex: 1; height: 48px; background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 8px; margin: 0 10px; font-size: 1.2rem; text-align: center; font-weight: bold; }
         
         input[type="text"], input[type="number"] { background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; padding: 10px; width: 100%; box-sizing: border-box; font-size: 0.95rem; }
         
-        .btn-success { background-color: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-size: 1rem; font-weight: bold; margin-top: 8px; cursor: pointer; }
+        .btn-success { background-color: #10b981; color: white; border: none; cursor: pointer; transition: background-color 0.2s; }
         .btn-success:active { background-color: #059669; }
         .btn-danger { background-color: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .btn-secondary { background-color: #475569; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
@@ -82,7 +82,7 @@
                     <input type="text" id="add_unit" placeholder="単位 (例: 個, 袋)" value="個">
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button class="btn-success" style="padding:10px;" onclick="addNewItem()">➕ 登録</button>
+                    <button class="btn-success" style="padding:10px; width:100%; border-radius:8px; font-weight:bold;" onclick="addNewItem()">➕ 登録</button>
                     <button class="btn-secondary" onclick="toggleAddPanel()">取消</button>
                 </div>
             </div>
@@ -101,7 +101,9 @@
     </div>
 
     <script>
-        const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1526644856473124914/raUiq-wWWJ_Aep5zvXLzSSux7kN4Nyll_pVboKFKAHIOpEB3DcDOJMEImlLBMSrZay5Y'; 
+        // 디스코드 CORS 차단을 피하기 위해 프록시 서버를 경유하도록 설정했습니다.
+        const RAW_WEBHOOK = 'https://discord.com/api/webhooks/1526644856473124914/raUiq-wWWJ_Aep5zvXLzSSux7kN4Nyll_pVboKFKAHIOpEB3DcDOJMEImlLBMSrZay5Y';
+        const DISCORD_WEBHOOK_URL = 'https://corsproxy.io/?' + encodeURIComponent(RAW_WEBHOOK);
 
         const SUPABASE_URL = 'https://dhwdwbhfgoupnxseansd.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_dZl-kSDklZZvEjKO25iV5Q_2kwyyRxI';
@@ -189,8 +191,10 @@
                                 <button class="stepper-btn" onclick="adjustStock(${item.id}, 1)">＋</button>
                             </div>
                             
-                            <input type="text" id="note_${item.id}" placeholder="メモ (例: 出店用消費、2/3残し)" style="margin-bottom:8px;">
-                            <button class="btn-success" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock}, ${item.min_stock}, '${item.unit}')">💾 保存する</button>
+                            <div style="display: flex; gap: 8px; margin-top: 12px;">
+                                <input type="text" id="note_${item.id}" placeholder="メモ (例: 出店用消費、2/3残し)" style="flex: 1; margin-bottom: 0; height: 48px;">
+                                <button class="btn-success" style="width: 48px; height: 48px; margin-top: 0; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border-radius: 8px;" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock}, ${item.min_stock}, '${item.unit}')">💾</button>
+                            </div>
                         </div>
 
                         <div id="edit_${item.id}" class="hidden">
@@ -215,7 +219,7 @@
                                 </div>
                             </div>
                             <div style="display:flex; gap:8px;">
-                                <button class="btn-success" style="flex:2; margin-top:0; padding:10px;" onclick="updateItem(${item.id})">更新</button>
+                                <button class="btn-success" style="flex:2; margin-top:0; padding:10px; border-radius:8px; font-weight:bold;" onclick="updateItem(${item.id})">更新</button>
                                 <button class="btn-danger" style="flex:1;" onclick="deleteItem(${item.id})">削除</button>
                                 <button class="btn-secondary" style="flex:1;" onclick="toggleEdit(${item.id})">取消</button>
                             </div>
@@ -287,7 +291,7 @@
                 item_name: name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
             }]);
             
-            // Discord 알림 전송 (에러 팝업 추가됨)
+            // Discord Proxy 전송
             if (DISCORD_WEBHOOK_URL) {
                 const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
                 let statusStr = '🟢 適正';
@@ -308,12 +312,9 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ content: msg })
                     });
-                    
-                    if (!response.ok) {
-                        alert(`❌ 디스코드 발송 실패 (상태 코드: ${response.status}). 설정이나 브라우저 보안을 확인하세요.`);
-                    }
+                    if (!response.ok) alert('❌ Discord 通知の送信に失敗しました。');
                 } catch (e) {
-                    alert(`❌ 디스코드 연결 차단됨. 모바일 광고차단기(Adblock)나 브라우저의 추적방지 기능이 원인일 수 있습니다.\n상세: ${e.message}`);
+                    alert('❌ Discord 通知がブラウザにブロックされました。');
                 }
             }
 
