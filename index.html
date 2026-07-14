@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RCS 在庫管理</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { background: #0f172a; color: #f1f5f9; font-family: sans-serif; padding: 15px; }
+        .item-card { background: #1e293b; padding: 15px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #334155; }
+        .quick-btn { background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 4px; margin-right: 4px; }
+        .save-btn { background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 4px; width: 100%; margin-top: 8px; font-weight: bold; }
+        input[type="number"], input[type="text"] { background: #0f172a; color: white; border: 1px solid #475569; padding: 8px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h3 style="margin-top: 0;">📦 RCS 在庫管理 (高速版)</h3>
+    <div id="inventory-list">読み込み中...</div>
+
+    <script>
+        // 여기에 Supabase 정보를 입력합니다.
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        const SUPABASE_KEY = 'YOUR_ANON_KEY';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function loadInventory() {
+            const { data, error } = await supabase.from('inventory').select('*').order('id');
+            if (error) return alert('エラー: ' + error.message);
+            
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = data.map(item => `
+                <div class="item-card">
+                    <div style="font-weight: bold; margin-bottom: 8px;">${item.item_name} <span style="font-size: 0.8em; color: #94a3b8;">(現在: ${item.current_stock}${item.unit})</span></div>
+                    
+                    <div style="display: flex; gap: 5px; margin-bottom: 8px; align-items: center;">
+                        <input type="number" id="input_${item.id}" value="${item.current_stock}" step="0.1" style="width: 70px;">
+                        <button class="quick-btn" onclick="addStock(${item.id}, 0.33)">+1/3</button>
+                        <button class="quick-btn" onclick="addStock(${item.id}, 0.5)">+1/2</button>
+                        <button class="quick-btn" onclick="addStock(${item.id}, 1)">+1</button>
+                    </div>
+                    
+                    <input type="text" id="note_${item.id}" placeholder="メモ (例: 出店用消費)" style="width: 100%; box-sizing: border-box; margin-bottom: 8px;">
+                    <button class="save-btn" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock})">💾 確定保存</button>
+                </div>
+            `).join('');
+        }
+
+        function addStock(id, amount) {
+            const input = document.getElementById(`input_${id}`);
+            input.value = (parseFloat(input.value) + amount).toFixed(2);
+        }
+
+        async function saveStock(id, name, beforeQty) {
+            const newQty = parseFloat(document.getElementById(`input_${id}`).value);
+            const note = document.getElementById(`note_${id}`).value;
+            const diff = newQty - beforeQty;
+
+            if (diff === 0 && !note) return alert('変更がありません。');
+
+            await supabase.from('inventory').update({ current_stock: newQty }).eq('id', id);
+            await supabase.from('inventory_logs').insert([{
+                item_name: name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
+            }]);
+            
+            alert('✅ 保存完了！');
+            loadInventory();
+        }
+
+        loadInventory();
+    </script>
+</body>
+</html>
