@@ -13,19 +13,16 @@
         .tab-btn { flex: 1; background: none; border: none; color: #94a3b8; padding: 10px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
         .tab-btn.active { background-color: #2563eb; color: white; }
         
-        /* Search & Filter & Add */
         .search-group { display: flex; gap: 8px; margin-bottom: 12px; }
         .search-bar { padding: 10px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 0.95rem; box-sizing: border-box; }
         .add-panel { background: #1e293b; padding: 12px; border-radius: 8px; border: 1px dashed #475569; margin-bottom: 16px; }
         
-        /* Card & Inputs */
         .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
         .item-title { font-size: 1.1rem; font-weight: bold; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
         .cat-badge { background-color: #334155; color: #cbd5e1; font-size: 0.75rem; padding: 3px 6px; border-radius: 4px; font-weight: normal; }
         .item-meta { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
         
-        /* Mobile Stepper UX */
         .stepper-group { display: flex; align-items: center; margin-bottom: 12px; }
         .stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .stepper-btn:active { background-color: #475569; }
@@ -44,7 +41,6 @@
         
         .hidden { display: none !important; }
         
-        /* History logs */
         .log-item { border-bottom: 1px solid #334155; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; }
         .log-item:last-child { border-bottom: none; }
         .log-diff-plus { color: #10b981; font-weight: bold; }
@@ -105,6 +101,8 @@
     </div>
 
     <script>
+        const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1526644856473124914/raUiq-wWWJ_Aep5zvXLzSSux7kN4Nyll_pVboKFKAHIOpEB3DcDOJMEImlLBMSrZay5Y'; 
+
         const SUPABASE_URL = 'https://dhwdwbhfgoupnxseansd.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_dZl-kSDklZZvEjKO25iV5Q_2kwyyRxI';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -141,20 +139,13 @@
         function updateCategoryFilter() {
             const filter = document.getElementById('category-filter');
             const currentVal = filter.value;
-            
-            // Extract unique categories, filter out empty ones
             const uniqueCats = [...new Set(inventoryData.map(item => item.category))].filter(Boolean);
             
             let options = '<option value="すべて">全分類</option>';
-            uniqueCats.forEach(cat => {
-                options += `<option value="${cat}">${cat}</option>`;
-            });
+            uniqueCats.forEach(cat => { options += `<option value="${cat}">${cat}</option>`; });
             filter.innerHTML = options;
             
-            // Maintain selected option if it still exists
-            if (uniqueCats.includes(currentVal)) {
-                filter.value = currentVal;
-            }
+            if (uniqueCats.includes(currentVal)) filter.value = currentVal;
         }
 
         function renderInventory() {
@@ -199,7 +190,7 @@
                             </div>
                             
                             <input type="text" id="note_${item.id}" placeholder="メモ (例: 出店用消費、2/3残し)" style="margin-bottom:8px;">
-                            <button class="btn-success" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock})">💾 保存する</button>
+                            <button class="btn-success" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock}, ${item.min_stock}, '${item.unit}')">💾 保存する</button>
                         </div>
 
                         <div id="edit_${item.id}" class="hidden">
@@ -213,7 +204,6 @@
                                     <input type="text" id="edit_name_${item.id}" value="${item.item_name}">
                                 </div>
                             </div>
-                            
                             <div style="display:flex; gap:8px; margin-bottom:12px;">
                                 <div style="flex:1;">
                                     <label style="font-size:0.8rem; color:#94a3b8;">目標値</label>
@@ -224,7 +214,6 @@
                                     <input type="text" id="edit_unit_${item.id}" value="${item.unit}">
                                 </div>
                             </div>
-                            
                             <div style="display:flex; gap:8px;">
                                 <button class="btn-success" style="flex:2; margin-top:0; padding:10px;" onclick="updateItem(${item.id})">更新</button>
                                 <button class="btn-danger" style="flex:1;" onclick="deleteItem(${item.id})">削除</button>
@@ -242,10 +231,8 @@
             logsData = data;
 
             const list = document.getElementById('history-list');
-            if (data.length === 0) {
-                list.innerHTML = '<p style="text-align:center; color:#94a3b8;">履歴がありません。</p>';
-                return;
-            }
+            if (data.length === 0) { list.innerHTML = '<p style="text-align:center; color:#94a3b8;">履歴がありません。</p>'; return; }
+            
             list.innerHTML = data.map(r => {
                 const diff = parseFloat(r.diff_qty);
                 const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
@@ -266,8 +253,6 @@
             }).join('');
         }
 
-        /* ------------------ Interaction Logic ------------------ */
-
         function adjustStock(id, amount) {
             const input = document.getElementById(`input_${id}`);
             let newVal = parseFloat(input.value) + amount;
@@ -285,9 +270,7 @@
             document.getElementById('show-add-btn').classList.toggle('hidden');
         }
 
-        /* ------------------ Database Logic ------------------ */
-
-        async function saveStock(id, name, beforeQty) {
+        async function saveStock(id, name, beforeQty, minStock, unit) {
             const newQty = parseFloat(document.getElementById(`input_${id}`).value);
             const note = document.getElementById(`note_${id}`).value;
             const diff = Number((newQty - beforeQty).toFixed(2));
@@ -304,6 +287,31 @@
                 item_name: name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
             }]);
             
+            if (DISCORD_WEBHOOK_URL) {
+                const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
+                let statusStr = '🟢 適正';
+                
+                if (newQty <= minStock) {
+                    const shortage = Number((minStock - newQty).toFixed(2));
+                    statusStr = `🔴 不足 (目標より **${shortage}${unit}** 不足)`;
+                }
+
+                let msg = `📦 **[在庫更新] ${name}**\n`;
+                msg += `> 変更: ${beforeQty} → **${newQty}** (${diffStr}${unit})\n`;
+                msg += `> 状態: ${statusStr}\n`;
+                if (note) msg += `> メモ: 📝 ${note}\n`;
+
+                try {
+                    await fetch(DISCORD_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: msg })
+                    });
+                } catch (e) {
+                    console.error("Discord Error", e);
+                }
+            }
+
             alert('✅ 保存しました！');
             document.getElementById(`note_${id}`).value = ''; 
             fetchInventory();
@@ -351,8 +359,6 @@
             }
         }
 
-        /* ------------------ Export ------------------ */
-        
         function exportCSV(type) {
             let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
             if (type === 'current') {
