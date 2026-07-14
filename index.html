@@ -194,7 +194,9 @@
     <script>
         const SUPABASE_URL = 'https://dhwdwbhfgoupnxseansd.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_dZl-kSDklZZvEjKO25iV5Q_2kwyyRxI';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        // 1. 변수명을 supabaseClient로 변경하여 충돌 회피
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let inventoryData = [];
         let logsData = [];
@@ -217,7 +219,8 @@
         }
 
         async function loadInventory() {
-            const { data, error } = await supabase.from('inventory').select('*').order('id');
+            // 2. DB 호출 변수명 변경 (supabase -> supabaseClient)
+            const { data, error } = await supabaseClient.from('inventory').select('*').order('id');
             if (error) return alert('データロード失敗: ' + error.message);
             inventoryData = data;
             
@@ -250,7 +253,8 @@
         }
 
         async function loadHistory() {
-            const { data, error } = await supabase.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(20);
+            // 3. DB 호출 변수명 변경 (supabase -> supabaseClient)
+            const { data, error } = await supabaseClient.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(20);
             if (error) return alert('履歴ロード失敗: ' + error.message);
             logsData = data;
 
@@ -294,10 +298,12 @@
                 return;
             }
 
-            const { error: updateError } = await supabase.from('inventory').update({ current_stock: newQty }).eq('id', id);
+            // 4. DB 호출 변수명 변경 (supabase -> supabaseClient)
+            const { error: updateError } = await supabaseClient.from('inventory').update({ current_stock: newQty }).eq('id', id);
             if (updateError) return alert('재고 수정 실패: ' + updateError.message);
 
-            const { error: logError } = await supabase.from('inventory_logs').insert([{
+            // 5. DB 호출 변수명 변경 (supabase -> supabaseClient)
+            const { error: logError } = await supabaseClient.from('inventory_logs').insert([{
                 item_name: name,
                 before_qty: beforeQty,
                 after_qty: newQty,
@@ -338,6 +344,3 @@
         }
 
         loadInventory();
-    </script>
-</body>
-</html>
