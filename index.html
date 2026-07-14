@@ -9,7 +9,6 @@
         body { background-color: #0f172a; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; padding-bottom: 80px; }
         .container { max-width: 600px; margin: 0 auto; }
         
-        /* Header Flexbox Layout */
         .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; gap: 8px; }
         
@@ -344,11 +343,8 @@
             document.getElementById('show-add-btn').classList.toggle('hidden');
         }
 
-        // ==========================
-        // 다중 일괄 저장 (새 기능)
-        // ==========================
         async function saveAllStock() {
-            if (navigator.vibrate) navigator.vibrate([50, 50, 50]); // 진동 피드백
+            if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
 
             const updates = [];
             const logs = [];
@@ -358,7 +354,7 @@
             for (const item of inventoryData) {
                 const inputEl = document.getElementById(`input_${item.id}`);
                 const noteEl = document.getElementById(`note_${item.id}`);
-                if (!inputEl) continue; // 화면에 렌더링되지 않은 경우 건너뜀
+                if (!inputEl) continue;
 
                 const beforeQty = parseFloat(item.current_stock);
                 const newQty = parseFloat(inputEl.value);
@@ -377,7 +373,7 @@
                     const statusStr = isLow ? `🔴 不足` : `🟢 適正`;
                     
                     let fieldVal = `${beforeQty} → **${newQty}** (${diffStr}${item.unit}) | ${statusStr}`;
-                    if (note) fieldVal += `\n└ 📝 ${note}`;
+                    if (note) fieldVal += `\nメモ: 📝 ${note}`;
                     
                     discordFields.push({ name: item.item_name, value: fieldVal, inline: false });
                 }
@@ -389,16 +385,14 @@
             }
 
             try {
-                // DB 병렬 업데이트
                 await Promise.all(updates);
                 if (logs.length > 0) await supabaseClient.from('inventory_logs').insert(logs);
 
-                // 디스코드 전송 (여러 건을 하나의 카드로 압축)
                 if (DISCORD_WEBHOOK_URL && discordFields.length > 0) {
                     const embed = {
                         title: `📦 [在庫一括更新] 計 ${totalDiffs}件`,
-                        color: 0x3b82f6, // 파란색 띠
-                        fields: discordFields.slice(0, 25), // 디스코드 API 제한(최대 25필드) 방지
+                        color: 0x3b82f6,
+                        fields: discordFields.slice(0, 25),
                         timestamp: new Date().toISOString()
                     };
 
@@ -410,13 +404,12 @@
                 }
 
                 showToast(`✅ ${totalDiffs}件のデータを一括保存しました！`);
-                fetchInventory(); // UI 및 메모 초기화
+                fetchInventory(); 
             } catch (error) {
                 alert('一括保存エラー: ' + error.message);
             }
         }
 
-        // 개별 저장
         async function saveStock(id, name, beforeQty, minStock, unit) {
             const newQty = parseFloat(document.getElementById(`input_${id}`).value);
             const note = document.getElementById(`note_${id}`).value;
@@ -445,16 +438,17 @@
                     statusStr = `🔴 不足 (目標より **${shortage}${unit}** 不足)`;
                 }
 
+                // 디스코드 한줄 압축 렌더링
+                let desc = `変更: ${beforeQty} → **${newQty}** (${diffStr}${unit})\n`;
+                desc += `${statusStr}`;
+                if (note) desc += `\nメモ: 📝 ${note}`;
+
                 const embed = {
                     title: `📦 [在庫更新] ${name}`,
                     color: color,
-                    fields: [
-                        { name: "変更", value: `${beforeQty} → **${newQty}** (${diffStr}${unit})`, inline: true },
-                        { name: "状態", value: statusStr, inline: true }
-                    ],
+                    description: desc,
                     timestamp: new Date().toISOString()
                 };
-                if (note) embed.fields.push({ name: "メモ", value: `📝 ${note}`, inline: false });
 
                 try {
                     await fetch(DISCORD_WEBHOOK_URL, {
