@@ -1,54 +1,52 @@
-    <style>
-        body { background-color: #0f172a; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; padding-bottom: 80px; }
-        .container { max-width: 600px; margin: 0 auto; }
-        
-        .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; gap: 8px; }
-        
-        .tab-container { display: flex; gap: 8px; background-color: #1e293b; padding: 6px; border-radius: 10px; margin-bottom: 16px; }
-        .tab-btn { flex: 1; background: none; border: none; color: #94a3b8; padding: 10px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
-        .tab-btn.active { background-color: #2563eb; color: white; }
-        
-        .search-group { display: flex; gap: 8px; margin-bottom: 12px; }
-        .search-bar { padding: 10px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 0.95rem; box-sizing: border-box; }
-        .add-panel { background: #1e293b; padding: 12px; border-radius: 8px; border: 1px dashed #475569; margin-bottom: 16px; }
-        
-        .section-title { font-size: 0.9rem; font-weight: bold; color: #94a3b8; margin: 16px 0 8px 4px; border-bottom: 1px solid #334155; padding-bottom: 4px; }
-        .fav-btn { background: none; border: none; color: #fbbf24; font-size: 1.5rem; margin-right: 4px; padding: 0; cursor: pointer; line-height: 1; }
-        .fav-btn.outline { color: #475569; }
+body { background-color: #0f172a; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; padding-bottom: 80px; }
+.container { max-width: 600px; margin: 0 auto; }
 
-        .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-        .item-title { font-size: 1.1rem; font-weight: bold; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-        .cat-badge { background-color: #334155; color: #cbd5e1; font-size: 0.75rem; padding: 3px 6px; border-radius: 4px; font-weight: normal; }
-        .item-meta { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; margin-left: 30px; }
-        
-        .stepper-group { display: flex; align-items: center; margin-bottom: 0px; }
-        .stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; }
-        .stepper-btn:active { background-color: #475569; }
-        .stepper-input { flex: 1; height: 48px; background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 8px; margin: 0 10px; font-size: 1.2rem; text-align: center; font-weight: bold; }
-        
-        input[type="text"], input[type="number"] { background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; padding: 10px; width: 100%; box-sizing: border-box; font-size: 0.95rem; }
-        
-        .btn-primary-small { background-color: #2563eb; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: background-color 0.2s; }
-        .btn-primary-small:active { background-color: #1d4ed8; }
-        
-        .btn-success { background-color: #10b981; color: white; border: none; cursor: pointer; transition: background-color 0.2s; }
-        .btn-success:active { background-color: #059669; }
-        .btn-danger { background-color: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .btn-secondary { background-color: #475569; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .icon-btn { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; padding: 4px; margin-left: auto; }
-        
-        .badge-low { background-color: #ef4444; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
-        .badge-ok { background-color: #10b981; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
-        
-        .hidden { display: none !important; }
-        
-        #toast { visibility: hidden; min-width: 250px; background-color: #10b981; color: white; text-align: center; border-radius: 8px; padding: 14px; position: fixed; z-index: 1000; left: 50%; bottom: -50px; transform: translateX(-50%); font-weight: bold; font-size: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s, bottom 0.3s; }
-        #toast.show { visibility: visible; opacity: 1; bottom: 30px; }
+.header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; gap: 8px; }
 
-        .log-item { border-bottom: 1px solid #334155; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; }
-        .log-item:last-child { border-bottom: none; }
-        .log-diff-plus { color: #10b981; font-weight: bold; }
-        .log-diff-minus { color: #ef4444; font-weight: bold; }
-    </style>
+.tab-container { display: flex; gap: 8px; background-color: #1e293b; padding: 6px; border-radius: 10px; margin-bottom: 16px; }
+.tab-btn { flex: 1; background: none; border: none; color: #94a3b8; padding: 10px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+.tab-btn.active { background-color: #2563eb; color: white; }
+
+.search-group { display: flex; gap: 8px; margin-bottom: 12px; }
+.search-bar { padding: 10px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 0.95rem; box-sizing: border-box; }
+.add-panel { background: #1e293b; padding: 12px; border-radius: 8px; border: 1px dashed #475569; margin-bottom: 16px; }
+
+.section-title { font-size: 0.9rem; font-weight: bold; color: #94a3b8; margin: 16px 0 8px 4px; border-bottom: 1px solid #334155; padding-bottom: 4px; }
+.fav-btn { background: none; border: none; color: #fbbf24; font-size: 1.5rem; margin-right: 4px; padding: 0; cursor: pointer; line-height: 1; }
+.fav-btn.outline { color: #475569; }
+
+.card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+.item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.item-title { font-size: 1.1rem; font-weight: bold; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.cat-badge { background-color: #334155; color: #cbd5e1; font-size: 0.75rem; padding: 3px 6px; border-radius: 4px; font-weight: normal; }
+.item-meta { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; margin-left: 30px; }
+
+.stepper-group { display: flex; align-items: center; margin-bottom: 0px; }
+.stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; }
+.stepper-btn:active { background-color: #475569; }
+.stepper-input { flex: 1; height: 48px; background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 8px; margin: 0 10px; font-size: 1.2rem; text-align: center; font-weight: bold; }
+
+input[type="text"], input[type="number"] { background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; padding: 10px; width: 100%; box-sizing: border-box; font-size: 0.95rem; }
+
+.btn-primary-small { background-color: #2563eb; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: background-color 0.2s; }
+.btn-primary-small:active { background-color: #1d4ed8; }
+
+.btn-success { background-color: #10b981; color: white; border: none; cursor: pointer; transition: background-color 0.2s; }
+.btn-success:active { background-color: #059669; }
+.btn-danger { background-color: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.btn-secondary { background-color: #475569; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.icon-btn { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; padding: 4px; margin-left: auto; }
+
+.badge-low { background-color: #ef4444; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
+.badge-ok { background-color: #10b981; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
+
+.hidden { display: none !important; }
+
+#toast { visibility: hidden; min-width: 250px; background-color: #10b981; color: white; text-align: center; border-radius: 8px; padding: 14px; position: fixed; z-index: 1000; left: 50%; bottom: -50px; transform: translateX(-50%); font-weight: bold; font-size: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s, bottom 0.3s; }
+#toast.show { visibility: visible; opacity: 1; bottom: 30px; }
+
+.log-item { border-bottom: 1px solid #334155; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; }
+.log-item:last-child { border-bottom: none; }
+.log-diff-plus { color: #10b981; font-weight: bold; }
+.log-diff-minus { color: #ef4444; font-weight: bold; }
