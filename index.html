@@ -287,6 +287,7 @@
                 item_name: name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
             }]);
             
+            // Discord 알림 전송 (에러 팝업 추가됨)
             if (DISCORD_WEBHOOK_URL) {
                 const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
                 let statusStr = '🟢 適正';
@@ -302,13 +303,17 @@
                 if (note) msg += `> メモ: 📝 ${note}\n`;
 
                 try {
-                    await fetch(DISCORD_WEBHOOK_URL, {
+                    const response = await fetch(DISCORD_WEBHOOK_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ content: msg })
                     });
+                    
+                    if (!response.ok) {
+                        alert(`❌ 디스코드 발송 실패 (상태 코드: ${response.status}). 설정이나 브라우저 보안을 확인하세요.`);
+                    }
                 } catch (e) {
-                    console.error("Discord Error", e);
+                    alert(`❌ 디스코드 연결 차단됨. 모바일 광고차단기(Adblock)나 브라우저의 추적방지 기능이 원인일 수 있습니다.\n상세: ${e.message}`);
                 }
             }
 
