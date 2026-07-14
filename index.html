@@ -6,37 +6,49 @@
     <title>RCS 在庫管理</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body {
-            background-color: #0f172a;
-            color: #f1f5f9;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0;
-            padding: 16px;
-        }
+        body { background-color: #0f172a; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; }
         .container { max-width: 600px; margin: 0 auto; }
-        h1 { font-size: 1.4rem; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
-        .tab-container { display: flex; gap: 8px; background-color: #1e293b; padding: 6px; border-radius: 10px; margin-bottom: 20px; }
+        h1 { font-size: 1.4rem; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .tab-container { display: flex; gap: 8px; background-color: #1e293b; padding: 6px; border-radius: 10px; margin-bottom: 16px; }
         .tab-btn { flex: 1; background: none; border: none; color: #94a3b8; padding: 10px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
         .tab-btn.active { background-color: #2563eb; color: white; }
+        
+        /* Search & Add */
+        .search-bar { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 1rem; box-sizing: border-box; margin-bottom: 12px; }
+        .add-panel { background: #1e293b; padding: 12px; border-radius: 8px; border: 1px dashed #475569; margin-bottom: 16px; }
+        
+        /* Card & Inputs */
         .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .item-title { font-size: 1.05rem; font-weight: bold; }
-        .item-meta { font-size: 0.8rem; color: #94a3b8; }
-        .input-group { display: flex; gap: 6px; margin-bottom: 12px; align-items: center; }
-        input[type="number"] { background-color: #0f172a; color: #f1f5f9; border: 1px solid #475569; border-radius: 6px; padding: 8px; width: 70px; font-size: 1rem; text-align: center; }
-        .btn { background-color: #334155; color: #f1f5f9; border: none; border-radius: 6px; padding: 8px 10px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: background-color 0.1s; }
-        .btn:active { background-color: #475569; }
-        .btn-primary { background-color: #2563eb; }
-        .btn-primary:active { background-color: #1d4ed8; }
-        .btn-success { background-color: #10b981; width: 100%; padding: 10px; font-size: 0.95rem; }
+        .item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .item-title { font-size: 1.1rem; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+        .item-meta { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
+        
+        /* Mobile Stepper UX */
+        .stepper-group { display: flex; align-items: center; margin-bottom: 8px; }
+        .stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .stepper-btn:active { background-color: #475569; }
+        .stepper-input { flex: 1; height: 48px; background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 8px; margin: 0 10px; font-size: 1.2rem; text-align: center; font-weight: bold; }
+        
+        .quick-fractions { display: flex; gap: 6px; margin-bottom: 12px; }
+        .fraction-btn { flex: 1; background: #0f172a; border: 1px solid #334155; color: #cbd5e1; padding: 8px 0; border-radius: 6px; font-size: 0.85rem; font-weight: bold; cursor: pointer; }
+        .fraction-btn:active { background: #334155; }
+        
+        input[type="text"], input[type="number"] { background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; padding: 10px; width: 100%; box-sizing: border-box; font-size: 0.95rem; }
+        
+        .btn-success { background-color: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-size: 1rem; font-weight: bold; margin-top: 8px; cursor: pointer; }
         .btn-success:active { background-color: #059669; }
-        input[type="text"] { background-color: #0f172a; color: #f1f5f9; border: 1px solid #475569; border-radius: 6px; padding: 8px 12px; width: 100%; box-sizing: border-box; font-size: 0.85rem; margin-bottom: 12px; }
-        .badge-low { background-color: #ef4444; color: white; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-        .badge-ok { background-color: #10b981; color: white; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-        .hidden { display: none; }
+        .btn-danger { background-color: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .btn-secondary { background-color: #475569; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .icon-btn { background: none; border: none; color: #94a3b8; font-size: 1.1rem; cursor: pointer; padding: 4px; }
+        
+        .badge-low { background-color: #ef4444; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
+        .badge-ok { background-color: #10b981; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
+        
+        .hidden { display: none !important; }
+        
+        /* History logs */
         .log-item { border-bottom: 1px solid #334155; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; }
         .log-item:last-child { border-bottom: none; }
-        .log-meta { font-size: 0.75rem; color: #94a3b8; }
         .log-diff-plus { color: #10b981; font-weight: bold; }
         .log-diff-minus { color: #ef4444; font-weight: bold; }
     </style>
@@ -51,13 +63,28 @@
         </div>
 
         <div id="tab-update">
+            <input type="text" class="search-bar" id="search-input" placeholder="🔍 商品名で検索..." oninput="renderInventory()">
+            
+            <div class="add-panel hidden" id="add-panel">
+                <input type="text" id="add_name" placeholder="商品名" style="margin-bottom:8px;">
+                <div style="display:flex; gap:8px; margin-bottom:8px;">
+                    <input type="number" id="add_min" placeholder="目標値 (例: 10)" step="0.5">
+                    <input type="text" id="add_unit" placeholder="単位 (例: 個, 袋)" value="個">
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn-success" style="padding:10px;" onclick="addNewItem()">➕ 登録</button>
+                    <button class="btn-secondary" onclick="toggleAddPanel()">取消</button>
+                </div>
+            </div>
+            <button class="btn-secondary" id="show-add-btn" style="width:100%; margin-bottom:16px; background:#1e293b; border:1px dashed #475569;" onclick="toggleAddPanel()">➕ 新規アイテムを登録</button>
+
             <div id="inventory-list">読み込み中...</div>
         </div>
 
         <div id="tab-history" class="hidden">
             <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-                <button class="btn" style="flex: 1;" onclick="exportCSV('current')">📦 現在の在庫DL (CSV)</button>
-                <button class="btn" style="flex: 1;" onclick="exportCSV('history')">📥 履歴データDL (CSV)</button>
+                <button class="btn-secondary" style="flex: 1;" onclick="exportCSV('current')">📦 現在の在庫DL</button>
+                <button class="btn-secondary" style="flex: 1;" onclick="exportCSV('history')">📥 履歴データDL</button>
             </div>
             <div id="history-list">読み込み中...</div>
         </div>
@@ -80,55 +107,100 @@
             if (tab === 'update') {
                 document.getElementById('tab-update-btn').classList.add('active');
                 document.getElementById('tab-update').classList.remove('hidden');
-                loadInventory();
+                fetchInventory();
             } else {
                 document.getElementById('tab-history-btn').classList.add('active');
                 document.getElementById('tab-history').classList.remove('hidden');
-                loadHistory();
+                fetchHistory();
             }
         }
 
-        async function loadInventory() {
+        async function fetchInventory() {
             const { data, error } = await supabaseClient.from('inventory').select('*').order('id');
-            if (error) return alert('データロード失敗: ' + error.message);
+            if (error) return alert('ロード失敗: ' + error.message);
             inventoryData = data;
-            
+            renderInventory();
+        }
+
+        function renderInventory() {
+            const query = document.getElementById('search-input').value.toLowerCase();
             const list = document.getElementById('inventory-list');
-            list.innerHTML = data.map(item => {
+            
+            const filtered = inventoryData.filter(item => item.item_name.toLowerCase().includes(query));
+            
+            if (filtered.length === 0) {
+                list.innerHTML = '<p style="text-align:center; color:#94a3b8;">該当するアイテムがありません。</p>';
+                return;
+            }
+
+            list.innerHTML = filtered.map(item => {
                 const isLow = parseFloat(item.current_stock) <= parseFloat(item.min_stock);
-                const badge = isLow ? '<span class="badge-low">부족</span>' : '<span class="badge-ok">여유</span>';
+                const badge = isLow ? '<span class="badge-low">不足</span>' : '<span class="badge-ok">適正</span>';
+                
                 return `
-                    <div class="card">
-                        <div class="item-header">
-                            <div>
-                                <span class="item-title">${item.item_name}</span>
-                                <div class="item-meta">현재: ${item.current_stock} / 목표: ${item.min_stock} ${item.unit}</div>
+                    <div class="card" id="card_${item.id}">
+                        <div id="view_${item.id}">
+                            <div class="item-header">
+                                <div>
+                                    <div class="item-title">
+                                        ${item.item_name} 
+                                        <button class="icon-btn" onclick="toggleEdit(${item.id})">⚙️</button>
+                                    </div>
+                                    <div class="item-meta">現在: <strong style="color:white; font-size:1rem;">${item.current_stock}</strong> ${item.unit} / 目標: ${item.min_stock}</div>
+                                </div>
+                                ${badge}
                             </div>
-                            ${badge}
+                            
+                            <div class="stepper-group">
+                                <button class="stepper-btn" onclick="adjustStock(${item.id}, -1)">−</button>
+                                <input type="number" class="stepper-input" id="input_${item.id}" value="${item.current_stock}" step="0.1">
+                                <button class="stepper-btn" onclick="adjustStock(${item.id}, 1)">＋</button>
+                            </div>
+                            
+                            <div class="quick-fractions">
+                                <button class="fraction-btn" onclick="adjustStock(${item.id}, -0.5)">-1/2</button>
+                                <button class="fraction-btn" onclick="adjustStock(${item.id}, 0.33)">+1/3</button>
+                                <button class="fraction-btn" onclick="adjustStock(${item.id}, 0.5)">+1/2</button>
+                            </div>
+                            
+                            <input type="text" id="note_${item.id}" placeholder="メモ (例: 出店用消費、2/3残し)" style="margin-bottom:8px;">
+                            <button class="btn-success" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock})">💾 保存する</button>
                         </div>
-                        
-                        <div class="input-group">
-                            <input type="number" id="input_${item.id}" value="${item.current_stock}" step="0.1">
-                            <button class="btn" onclick="adjustStock(${item.id}, 0.33)">+1/3</button>
-                            <button class="btn" onclick="adjustStock(${item.id}, 0.5)">+1/2</button>
-                            <button class="btn" onclick="adjustStock(${item.id}, 1)">+1</button>
+
+                        <div id="edit_${item.id}" class="hidden">
+                            <label style="font-size:0.8rem; color:#94a3b8;">商品名</label>
+                            <input type="text" id="edit_name_${item.id}" value="${item.item_name}" style="margin-bottom:8px;">
+                            
+                            <div style="display:flex; gap:8px; margin-bottom:12px;">
+                                <div style="flex:1;">
+                                    <label style="font-size:0.8rem; color:#94a3b8;">目標値</label>
+                                    <input type="number" id="edit_min_${item.id}" value="${item.min_stock}" step="0.5">
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-size:0.8rem; color:#94a3b8;">単位</label>
+                                    <input type="text" id="edit_unit_${item.id}" value="${item.unit}">
+                                </div>
+                            </div>
+                            
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn-success" style="flex:2; margin-top:0; padding:10px;" onclick="updateItem(${item.id})">更新</button>
+                                <button class="btn-danger" style="flex:1;" onclick="deleteItem(${item.id})">削除</button>
+                                <button class="btn-secondary" style="flex:1;" onclick="toggleEdit(${item.id})">取消</button>
+                            </div>
                         </div>
-                        
-                        <input type="text" id="note_${item.id}" placeholder="변경 메모 (예: 출점용 소비, 2/3 남음)">
-                        <button class="btn btn-primary btn-success" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock})">💾 저장하기</button>
                     </div>
                 `;
             }).join('');
         }
 
-        async function loadHistory() {
-            const { data, error } = await supabaseClient.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(20);
+        async function fetchHistory() {
+            const { data, error } = await supabaseClient.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(30);
             if (error) return alert('履歴ロード失敗: ' + error.message);
             logsData = data;
 
             const list = document.getElementById('history-list');
             if (data.length === 0) {
-                list.innerHTML = '<p style="text-align:center; color:#94a3b8;">表示 가능한 이력이 없습니다.</p>';
+                list.innerHTML = '<p style="text-align:center; color:#94a3b8;">履歴がありません。</p>';
                 return;
             }
             list.innerHTML = data.map(r => {
@@ -139,11 +211,11 @@
                 return `
                     <div class="log-item">
                         <div>
-                            <strong>${r.item_name}</strong>${noteStr}
-                            <div class="log-meta">${new Date(r.created_at).toLocaleString('ja-JP')}</div>
+                            <strong style="color:white;">${r.item_name}</strong>${noteStr}
+                            <div style="font-size: 0.75rem; color: #94a3b8; margin-top:2px;">${new Date(r.created_at).toLocaleString('ja-JP')}</div>
                         </div>
                         <div style="text-align: right;">
-                            <small>${r.before_qty} → ${r.after_qty}</small>
+                            <small style="color:#94a3b8;">${r.before_qty} → ${r.after_qty}</small>
                             <div class="${diffClass}">${diffStr}</div>
                         </div>
                     </div>
@@ -151,50 +223,100 @@
             }).join('');
         }
 
+        /* ------------------ Interaction Logic ------------------ */
+
         function adjustStock(id, amount) {
             const input = document.getElementById(`input_${id}`);
-            input.value = (parseFloat(input.value) + amount).toFixed(2);
+            let newVal = parseFloat(input.value) + amount;
+            // Prevent negative stock visually (optional, can be removed if negative is allowed)
+            if (newVal < 0) newVal = 0; 
+            input.value = Number(newVal.toFixed(2));
         }
+
+        function toggleEdit(id) {
+            document.getElementById(`view_${id}`).classList.toggle('hidden');
+            document.getElementById(`edit_${id}`).classList.toggle('hidden');
+        }
+
+        function toggleAddPanel() {
+            document.getElementById('add-panel').classList.toggle('hidden');
+            document.getElementById('show-add-btn').classList.toggle('hidden');
+        }
+
+        /* ------------------ Database Logic ------------------ */
 
         async function saveStock(id, name, beforeQty) {
             const newQty = parseFloat(document.getElementById(`input_${id}`).value);
             const note = document.getElementById(`note_${id}`).value;
-            const diff = newQty - beforeQty;
+            const diff = Number((newQty - beforeQty).toFixed(2));
 
             if (diff === 0 && !note) {
-                alert('변경된 수량이나 메모가 없습니다.');
+                alert('変更内容がありません。');
                 return;
             }
 
             const { error: updateError } = await supabaseClient.from('inventory').update({ current_stock: newQty }).eq('id', id);
-            if (updateError) return alert('재고 수정 실패: ' + updateError.message);
+            if (updateError) return alert('更新エラー: ' + updateError.message);
 
             const { error: logError } = await supabaseClient.from('inventory_logs').insert([{
-                item_name: name,
-                before_qty: beforeQty,
-                after_qty: newQty,
-                diff_qty: diff,
-                note: note
+                item_name: name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
             }]);
-            if (logError) return alert('이력 저장 실패: ' + logError.message);
-
-            alert('✅ 저장 완료!');
-            loadInventory();
+            
+            alert('✅ 保存しました！');
+            document.getElementById(`note_${id}`).value = ''; 
+            fetchInventory();
         }
 
+        async function updateItem(id) {
+            const name = document.getElementById(`edit_name_${id}`).value;
+            const min = document.getElementById(`edit_min_${id}`).value;
+            const unit = document.getElementById(`edit_unit_${id}`).value;
+
+            const { error } = await supabaseClient.from('inventory').update({
+                item_name: name, min_stock: min, unit: unit
+            }).eq('id', id);
+
+            if (error) alert('更新エラー: ' + error.message);
+            else fetchInventory();
+        }
+
+        async function deleteItem(id) {
+            if (!confirm('本当に削除しますか？')) return;
+            const { error } = await supabaseClient.from('inventory').delete().eq('id', id);
+            if (error) alert('削除エラー: ' + error.message);
+            else fetchInventory();
+        }
+
+        async function addNewItem() {
+            const name = document.getElementById('add_name').value;
+            const min = document.getElementById('add_min').value || 0;
+            const unit = document.getElementById('add_unit').value || '個';
+
+            if (!name.trim()) return alert('商品名を入力してください。');
+
+            const { error } = await supabaseClient.from('inventory').insert([{
+                item_name: name, current_stock: 0, min_stock: min, unit: unit, category: '新規'
+            }]);
+
+            if (error) alert('登録エラー: ' + error.message);
+            else {
+                document.getElementById('add_name').value = '';
+                toggleAddPanel();
+                fetchInventory();
+            }
+        }
+
+        /* ------------------ Export ------------------ */
+        
         function exportCSV(type) {
             let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
             if (type === 'current') {
                 csvContent += "商品名,現在在庫,目標値,単位\n";
-                inventoryData.forEach(r => {
-                    csvContent += `"${r.item_name}",${r.current_stock},${r.min_stock},"${r.unit}"\n`;
-                });
+                inventoryData.forEach(r => { csvContent += `"${r.item_name}",${r.current_stock},${r.min_stock},"${r.unit}"\n`; });
                 triggerDownload(csvContent, `current_stock_${new Date().toISOString().slice(0,10)}.csv`);
             } else {
                 csvContent += "時間,商品名,変更前,変更後,変動量,メモ\n";
-                logsData.forEach(r => {
-                    csvContent += `"${r.created_at}","${r.item_name}",${r.before_qty},${r.after_qty},${r.diff_qty},"${r.note || ''}"\n`;
-                });
+                logsData.forEach(r => { csvContent += `"${r.created_at}","${r.item_name}",${r.before_qty},${r.after_qty},${r.diff_qty},"${r.note || ''}"\n`; });
                 triggerDownload(csvContent, `inventory_logs_${new Date().toISOString().slice(0,10)}.csv`);
             }
         }
@@ -209,7 +331,7 @@
             document.body.removeChild(link);
         }
 
-        loadInventory();
+        fetchInventory();
     </script>
 </body>
 </html>
