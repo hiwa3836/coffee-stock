@@ -13,160 +13,32 @@
             margin: 0;
             padding: 16px;
         }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        h1 {
-            font-size: 1.4rem;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .tab-container {
-            display: flex;
-            gap: 8px;
-            background-color: #1e293b;
-            padding: 6px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        .tab-btn {
-            flex: 1;
-            background: none;
-            border: none;
-            color: #94a3b8;
-            padding: 10px;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.2s;
-        }
-        .tab-btn.active {
-            background-color: #2563eb;
-            color: white;
-        }
-        .card {
-            background-color: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        .item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        .item-title {
-            font-size: 1.05rem;
-            font-weight: bold;
-        }
-        .item-meta {
-            font-size: 0.8rem;
-            color: #94a3b8;
-        }
-        .input-group {
-            display: flex;
-            gap: 6px;
-            margin-bottom: 12px;
-            align-items: center;
-        }
-        input[type="number"] {
-            background-color: #0f172a;
-            color: #f1f5f9;
-            border: 1px solid #475569;
-            border-radius: 6px;
-            padding: 8px;
-            width: 70px;
-            font-size: 1rem;
-            text-align: center;
-        }
-        .btn {
-            background-color: #334155;
-            color: #f1f5f9;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 10px;
-            font-size: 0.85rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.1s;
-        }
-        .btn:active {
-            background-color: #475569;
-        }
-        .btn-primary {
-            background-color: #2563eb;
-        }
-        .btn-primary:active {
-            background-color: #1d4ed8;
-        }
-        .btn-success {
-            background-color: #10b981;
-            width: 100%;
-            padding: 10px;
-            font-size: 0.95rem;
-        }
-        .btn-success:active {
-            background-color: #059669;
-        }
-        input[type="text"] {
-            background-color: #0f172a;
-            color: #f1f5f9;
-            border: 1px solid #475569;
-            border-radius: 6px;
-            padding: 8px 12px;
-            width: 100%;
-            box-sizing: border-box;
-            font-size: 0.85rem;
-            margin-bottom: 12px;
-        }
-        .badge-low {
-            background-color: #ef4444;
-            color: white;
-            font-size: 0.75rem;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        .badge-ok {
-            background-color: #10b981;
-            color: white;
-            font-size: 0.75rem;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        .hidden {
-            display: none;
-        }
-        .log-item {
-            border-bottom: 1px solid #334155;
-            padding: 12px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .log-item:last-child {
-            border-bottom: none;
-        }
-        .log-meta {
-            font-size: 0.75rem;
-            color: #94a3b8;
-        }
-        .log-diff-plus {
-            color: #10b981;
-            font-weight: bold;
-        }
-        .log-diff-minus {
-            color: #ef4444;
-            font-weight: bold;
-        }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { font-size: 1.4rem; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+        .tab-container { display: flex; gap: 8px; background-color: #1e293b; padding: 6px; border-radius: 10px; margin-bottom: 20px; }
+        .tab-btn { flex: 1; background: none; border: none; color: #94a3b8; padding: 10px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+        .tab-btn.active { background-color: #2563eb; color: white; }
+        .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .item-title { font-size: 1.05rem; font-weight: bold; }
+        .item-meta { font-size: 0.8rem; color: #94a3b8; }
+        .input-group { display: flex; gap: 6px; margin-bottom: 12px; align-items: center; }
+        input[type="number"] { background-color: #0f172a; color: #f1f5f9; border: 1px solid #475569; border-radius: 6px; padding: 8px; width: 70px; font-size: 1rem; text-align: center; }
+        .btn { background-color: #334155; color: #f1f5f9; border: none; border-radius: 6px; padding: 8px 10px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: background-color 0.1s; }
+        .btn:active { background-color: #475569; }
+        .btn-primary { background-color: #2563eb; }
+        .btn-primary:active { background-color: #1d4ed8; }
+        .btn-success { background-color: #10b981; width: 100%; padding: 10px; font-size: 0.95rem; }
+        .btn-success:active { background-color: #059669; }
+        input[type="text"] { background-color: #0f172a; color: #f1f5f9; border: 1px solid #475569; border-radius: 6px; padding: 8px 12px; width: 100%; box-sizing: border-box; font-size: 0.85rem; margin-bottom: 12px; }
+        .badge-low { background-color: #ef4444; color: white; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .badge-ok { background-color: #10b981; color: white; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .hidden { display: none; }
+        .log-item { border-bottom: 1px solid #334155; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; }
+        .log-item:last-child { border-bottom: none; }
+        .log-meta { font-size: 0.75rem; color: #94a3b8; }
+        .log-diff-plus { color: #10b981; font-weight: bold; }
+        .log-diff-minus { color: #ef4444; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -194,8 +66,6 @@
     <script>
         const SUPABASE_URL = 'https://dhwdwbhfgoupnxseansd.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_dZl-kSDklZZvEjKO25iV5Q_2kwyyRxI';
-        
-        // 1. 변수명을 supabaseClient로 변경하여 충돌 회피
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let inventoryData = [];
@@ -219,7 +89,6 @@
         }
 
         async function loadInventory() {
-            // 2. DB 호출 변수명 변경 (supabase -> supabaseClient)
             const { data, error } = await supabaseClient.from('inventory').select('*').order('id');
             if (error) return alert('データロード失敗: ' + error.message);
             inventoryData = data;
@@ -253,7 +122,6 @@
         }
 
         async function loadHistory() {
-            // 3. DB 호출 변수명 변경 (supabase -> supabaseClient)
             const { data, error } = await supabaseClient.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(20);
             if (error) return alert('履歴ロード失敗: ' + error.message);
             logsData = data;
@@ -298,11 +166,9 @@
                 return;
             }
 
-            // 4. DB 호출 변수명 변경 (supabase -> supabaseClient)
             const { error: updateError } = await supabaseClient.from('inventory').update({ current_stock: newQty }).eq('id', id);
             if (updateError) return alert('재고 수정 실패: ' + updateError.message);
 
-            // 5. DB 호출 변수명 변경 (supabase -> supabaseClient)
             const { error: logError } = await supabaseClient.from('inventory_logs').insert([{
                 item_name: name,
                 before_qty: beforeQty,
@@ -344,3 +210,6 @@
         }
 
         loadInventory();
+    </script>
+</body>
+</html>
