@@ -14,7 +14,16 @@
 
 <body>
 
-<div class="container">
+<div id="gate-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg);z-index:10000;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px;padding:24px;">
+    <h1 style="margin-bottom:0;">📦 RCS 在庫管理</h1>
+    <p style="color:var(--sub);font-size:0.9rem;margin:0;">アクセスコードを入力してください</p>
+    <input type="password" id="gate-input" inputmode="numeric" placeholder="コード"
+        style="max-width:240px;text-align:center;font-size:1.1rem;">
+    <button class="btn-primary-small" style="padding:12px 24px;font-size:0.95rem;" onclick="checkAccessCode()">入室</button>
+    <p id="gate-error" style="color:var(--red);font-size:0.85rem;height:1em;margin:0;"></p>
+</div>
+
+<div class="container hidden" id="main-container">
 
     <header class="header-container">
         <h1>📦 RCS 在庫管理</h1>
