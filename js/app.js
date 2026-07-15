@@ -1,5 +1,6 @@
 const RAW_WEBHOOK = atob('aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUyNjY0NDg1NjQ3MzEyNDkxNC9yYVVpcS13V1dKX0FlcDV6dlhMelNTdXg3a040TnlsbF9wVmJvS0ZLQUhJT3BFQjNEY0RPSk1FSW1sTEJNU3JaYXk1WQ==');
-const DISCORD_WEBHOOK_URL = 'https://corsproxy.io/?' + encodeURIComponent(RAW_WEBHOOK);
+const isDiscordEnabled = document.getElementById('discord-toggle').checked;
+if (isDiscordEnabled && DISCORD_WEBHOOK_URL) {
 
 const SUPABASE_URL = 'https://dhwdwbhfgoupnxseansd.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_dZl-kSDklZZvEjKO25iV5Q_2kwyyRxI';
