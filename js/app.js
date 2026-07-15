@@ -30,6 +30,23 @@ let favs = JSON.parse(localStorage.getItem('rcs_favs') || '[]');
 let recents = JSON.parse(localStorage.getItem('rcs_recents') || '[]');
 let toastTimer;
 
+// 로딩 화면 제어
+function toggleLoading(show) {
+    const overlay = $("loading-overlay");
+    if (overlay) {
+        if (show) overlay.classList.remove("hidden");
+        else overlay.classList.add("hidden");
+    }
+}
+
+// 최종 동기화 시간 업데이트
+function updateSyncTime() {
+    const info = $("sync-info");
+    if (info) {
+        const now = new Date();
+        info.innerText = `最終同期 : ${now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    }
+}
 /* =====================================================================
    2. UTILITIES
    ===================================================================== */
