@@ -1,76 +1,206 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
     <title>RCS 在庫管理</title>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="css/style.css">
-    
-<div class="header-container">
-    <h1>📦 RCS 在庫管理</h1>
-    <div style="display: flex; align-items: center; gap: 8px;">
-        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #94a3b8; cursor: pointer;">
-            🔔
-            <div class="switch">
-                <input type="checkbox" id="discord-toggle" checked>
-                <span class="slider"></span>
-            </div>
-        </label>
-        <button class="btn-primary-small" onclick="saveAllStock()">💾 一括保存</button>
-    </div>
-</div>
-    <div class="tab-nav">
-    <button class="tab-btn active" id="tab-update-btn" onclick="switchTab('update')">📝 在庫更新</button>
-    <button class="tab-btn" id="tab-history-btn" onclick="switchTab('history')">📜 変更履歴</button>
-</div>
+    <link rel="stylesheet" href="css/style.css">
+</head>
 
-        <datalist id="category-suggestions">
-            <option value="豆">
-            <option value="カップ">
-            <option value="消耗品">
-            <option value="シロップ">
-            <option value="備品">
-        </datalist>
+<body>
 
-        <div id="tab-update">
-            <div class="search-group">
-                <select class="search-bar" id="category-filter" style="width: 40%;" onchange="renderInventory()">
-                    <option value="すべて">全分類</option>
-                </select>
-                <input type="text" class="search-bar" id="search-input" style="width: 60%;" placeholder="🔍 検索 (ひらがなOK)" oninput="renderInventory()">
-            </div>
-            
-            <div class="add-panel hidden" id="add-panel">
-                <div style="display:flex; gap:8px; margin-bottom:8px;">
-                    <input type="text" id="add_category" placeholder="分類 (例: 豆, カップ)" list="category-suggestions" style="flex:1;">
-                    <input type="text" id="add_name" placeholder="商品名" style="flex:2;">
-                </div>
-                <div style="display:flex; gap:8px; margin-bottom:8px;">
-                    <input type="number" id="add_min" placeholder="目標値 (例: 10)" step="0.5">
-                    <input type="text" id="add_unit" placeholder="単位 (例: 個, 袋)" value="個">
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn-success" style="padding:10px; width:100%; border-radius:8px; font-weight:bold;" onclick="addNewItem()">➕ 登録</button>
-                    <button class="btn-secondary" onclick="toggleAddPanel()">取消</button>
-                </div>
-            </div>
-            <button class="btn-secondary" id="show-add-btn" style="width:100%; margin-bottom:16px; background:#1e293b; border:1px dashed #475569;" onclick="toggleAddPanel()">➕ 新規アイテムを登録</button>
+<div class="container">
 
-            <div id="inventory-list">読み込み中...</div>
+    <header class="header-container">
+        <h1>📦 RCS 在庫管理</h1>
+
+        <div style="display:flex;align-items:center;gap:8px;">
+
+            <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:#94a3b8;cursor:pointer;">
+                🔔
+                <div class="switch">
+                    <input type="checkbox" id="discord-toggle" checked>
+                    <span class="slider"></span>
+                </div>
+            </label>
+
+            <button
+                class="btn-primary-small"
+                id="save-all-btn"
+                onclick="saveAllStock()">
+                💾 一括保存
+            </button>
+
         </div>
+    </header>
 
-        <div id="tab-history" class="hidden">
-            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-                <button class="btn-secondary" style="flex: 1;" onclick="exportCSV('current')">📦 現在の在庫DL</button>
-                <button class="btn-secondary" style="flex: 1;" onclick="exportCSV('history')">📥 履歴データDL</button>
-            </div>
-            <div id="history-list">読み込み中...</div>
-        </div>
+    <div id="sync-info" class="sync-info">
+        最終同期 : --
     </div>
 
-    <div id="toast"></div>
+    <nav class="tab-nav">
+
+        <button
+            class="tab-btn active"
+            id="tab-update-btn"
+            onclick="switchTab('update')">
+            📝 在庫更新
+        </button>
+
+        <button
+            class="tab-btn"
+            id="tab-history-btn"
+            onclick="switchTab('history')">
+            📜 変更履歴
+        </button>
+
+    </nav>
+
+    <datalist id="category-suggestions">
+        <option value="豆">
+        <option value="カップ">
+        <option value="消耗品">
+        <option value="シロップ">
+        <option value="備品">
+    </datalist>
+
+    <section id="tab-update">
+
+        <div class="search-group">
+
+            <select
+                class="search-bar"
+                id="category-filter"
+                style="width:40%;"
+                onchange="renderInventory()">
+
+                <option value="すべて">
+                    全分類
+                </option>
+
+            </select>
+
+            <input
+                type="text"
+                class="search-bar"
+                id="search-input"
+                style="width:60%;"
+                placeholder="🔍 検索 (ひらがなOK)"
+                oninput="renderInventory()">
+
+        </div>
+
+        <div class="add-panel hidden" id="add-panel">
+
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+
+                <input
+                    type="text"
+                    id="add_category"
+                    placeholder="分類"
+                    list="category-suggestions"
+                    style="flex:1;">
+
+                <input
+                    type="text"
+                    id="add_name"
+                    placeholder="商品名"
+                    style="flex:2;">
+
+            </div>
+
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+
+                <input
+                    type="number"
+                    id="add_min"
+                    placeholder="目標値"
+                    step="0.5">
+
+                <input
+                    type="text"
+                    id="add_unit"
+                    value="個"
+                    placeholder="単位">
+
+            </div>
+
+            <div style="display:flex;gap:8px;">
+
+                <button
+                    class="btn-success"
+                    style="width:100%;padding:10px;border-radius:8px;font-weight:bold;"
+                    onclick="addNewItem()">
+                    ➕ 登録
+                </button>
+
+                <button
+                    class="btn-secondary"
+                    onclick="toggleAddPanel()">
+                    取消
+                </button>
+
+            </div>
+
+        </div>
+
+        <button
+            id="show-add-btn"
+            class="btn-secondary"
+            style="width:100%;margin-bottom:16px;background:#1e293b;border:1px dashed #475569;"
+            onclick="toggleAddPanel()">
+            ➕ 新規アイテムを登録
+        </button>
+
+        <div id="inventory-list">
+            読み込み中...
+        </div>
+
+    </section>
+
+    <section
+        id="tab-history"
+        class="hidden">
+
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+
+            <button
+                class="btn-secondary"
+                style="flex:1;"
+                onclick="exportCSV('current')">
+                📦 現在の在庫DL
+            </button>
+
+            <button
+                class="btn-secondary"
+                style="flex:1;"
+                onclick="exportCSV('history')">
+                📥 履歴データDL
+            </button>
+
+        </div>
+
+        <div id="history-list">
+            読み込み中...
+        </div>
+
+    </section>
+
+</div>
+
+<div id="loading-overlay" class="hidden">
+    <div class="loading-spinner"></div>
+    <p>同期中...</p>
+</div>
+
+<div id="toast"></div>
 
 <script src="js/app.js"></script>
+
 </body>
 </html>
