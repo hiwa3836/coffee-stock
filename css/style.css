@@ -1,124 +1,155 @@
+/* 1. 공통 색상 변수 & 박스 사이징 */
+:root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --border-light: #475569;
+    
+    --blue: #2563eb;
+    --blue-hover: #1d4ed8;
+    --green: #10b981;
+    --green-dark: #059669;
+    --red: #ef4444;
+    --yellow: #fbbf24;
+    
+    --text: #f1f5f9;
+    --sub: #94a3b8;
+}
+
+* { 
+    box-sizing: border-box; 
+}
+
+/* 2. 스크롤바 커스텀 */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+/* 3. 기본 Body 설정 (폰트 스무딩 추가) */
 body { 
-    color-scheme: dark; /* 디스코드 강제 라이트 모드 방어 */
-    background-color: #0f172a; 
-    color: #f1f5f9; 
+    color-scheme: dark; 
+    background-color: var(--bg); 
+    color: var(--text); 
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
     margin: 0; 
     padding: 16px; 
     padding-bottom: 80px; 
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
 }
 
-.container { max-width: 600px; margin: 0 auto; }
+/* 4. 애니메이션 정의 */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
 
+/* 5. 공통 요소 스타일링 */
+.container { max-width: 600px; margin: 0 auto; }
+.header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; gap: 8px; }
+
+/* 6. 공통 버튼 스타일링 (Cursor, Transition, Hover 통일) */
+button { 
+    cursor: pointer; 
+    transition: .2s; 
+    touch-action: manipulation;
+}
+button:hover { filter: brightness(1.08); }
+
+.btn-primary-small { background-color: var(--blue); color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.btn-primary-small:active { background-color: var(--blue-hover); }
+
+.btn-success { background-color: var(--green); color: white; border: none; }
+.btn-success:active { background-color: var(--green-dark); }
+
+.btn-danger { background-color: var(--red); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; }
+.btn-secondary { background-color: var(--border-light); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; }
+
+/* 선택 방지 클래스 묶음 */
+.stepper-btn, .fav-btn, .icon-btn { user-select: none; }
+
+/* 7. 공통 인풋 스타일링 (Focus 효과 추가) */
+input[type="text"], input[type="number"] { 
+    background-color: var(--bg); 
+    color: white; 
+    border: 1px solid var(--border-light); 
+    border-radius: 6px; 
+    padding: 10px; 
+    width: 100%; 
+    font-size: 0.95rem; 
+    transition: .2s;
+}
+input:focus, select:focus { 
+    outline: none; 
+    border-color: var(--blue); 
+    box-shadow: 0 0 0 3px rgba(37,99,235,.2); 
+}
+
+/* 8. 탭 & 네비게이션 */
 .tab-nav { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab-container { display: flex; gap: 8px; background-color: var(--card); padding: 6px; border-radius: 10px; margin-bottom: 16px; }
+.tab-btn { flex: 1; background: none; border: none; color: var(--sub); padding: 10px; font-weight: bold; border-radius: 6px; font-size: 0.9rem; }
+.tab-btn.active { background-color: var(--blue); color: white; }
 
-.header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; gap: 8px; }
-
-.tab-container { display: flex; gap: 8px; background-color: #1e293b; padding: 6px; border-radius: 10px; margin-bottom: 16px; }
-.tab-btn { flex: 1; background: none; border: none; color: #94a3b8; padding: 10px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
-.tab-btn.active { background-color: #2563eb; color: white; }
-
+/* 9. 검색 & 추가 패널 */
 .search-group { display: flex; gap: 8px; margin-bottom: 12px; }
-.search-bar { padding: 10px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 0.95rem; box-sizing: border-box; }
-.add-panel { background: #1e293b; padding: 12px; border-radius: 8px; border: 1px dashed #475569; margin-bottom: 16px; }
+.search-bar { padding: 10px; border-radius: 8px; border: 1px solid var(--border-light); background: var(--card); color: white; font-size: 0.95rem; width: 100%; }
+.add-panel { background: var(--card); padding: 12px; border-radius: 8px; border: 1px dashed var(--border-light); margin-bottom: 16px; }
+.section-title { font-size: 0.9rem; font-weight: bold; color: var(--sub); margin: 16px 0 8px 4px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
 
-.section-title { font-size: 0.9rem; font-weight: bold; color: #94a3b8; margin: 16px 0 8px 4px; border-bottom: 1px solid #334155; padding-bottom: 4px; }
-.fav-btn { background: none; border: none; color: #fbbf24; font-size: 1.5rem; margin-right: 4px; padding: 0; cursor: pointer; line-height: 1; }
-.fav-btn.outline { color: #475569; }
+/* 10. 아이템 카드 (Hover 효과 및 Animation 추가) */
+.card { 
+    background-color: var(--card); 
+    border: 1px solid var(--border); 
+    border-radius: 12px; 
+    padding: 16px; 
+    margin-bottom: 12px; 
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+    transition: .2s;
+    animation: fadeUp .25s ease;
+}
+.card:hover {
+    border-color: var(--border-light);
+    transform: translateY(-2px);
+}
 
-.card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
 .item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
 .item-title { font-size: 1.1rem; font-weight: bold; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.cat-badge { background-color: #334155; color: #cbd5e1; font-size: 0.75rem; padding: 3px 6px; border-radius: 4px; font-weight: normal; }
-.item-meta { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; margin-left: 30px; }
+.item-meta { font-size: 0.85rem; color: var(--sub); margin-top: 4px; margin-left: 30px; }
 
+.cat-badge { background-color: var(--border); color: #cbd5e1; font-size: 0.75rem; padding: 3px 6px; border-radius: 4px; font-weight: normal; }
+.badge-low { background-color: var(--red); color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
+.badge-ok { background-color: var(--green); color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
+
+/* 11. 스테퍼 (수량 조절기) */
 .stepper-group { display: flex; align-items: center; margin-bottom: 0px; }
-.stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; }
-.stepper-btn:active { background-color: #475569; }
-.stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; touch-action: manipulation; }
-.stepper-input { flex: 1; height: 48px; background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 8px; margin: 0 10px; font-size: 1.2rem; text-align: center; font-weight: bold; }
+.stepper-btn { background-color: var(--border); color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+.stepper-btn:active { background-color: var(--border-light); }
+.stepper-input { flex: 1; height: 48px; background-color: var(--bg); color: white; border: 1px solid var(--border-light); border-radius: 8px; margin: 0 10px; font-size: 1.2rem; text-align: center; font-weight: bold; }
 
-input[type="text"], input[type="number"] { background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; padding: 10px; width: 100%; box-sizing: border-box; font-size: 0.95rem; }
+/* 12. 아이콘 버튼 */
+.fav-btn { background: none; border: none; color: var(--yellow); font-size: 1.5rem; margin-right: 4px; padding: 0; line-height: 1; }
+.fav-btn.outline { color: var(--border-light); }
+.icon-btn { background: none; border: none; color: var(--sub); font-size: 1.2rem; padding: 4px; margin-left: auto; }
 
-.btn-primary-small { background-color: #2563eb; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: background-color 0.2s; }
-.btn-primary-small:active { background-color: #1d4ed8; }
-
-.btn-success { background-color: #10b981; color: white; border: none; cursor: pointer; transition: background-color 0.2s; }
-.btn-success:active { background-color: #059669; }
-.btn-danger { background-color: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-.btn-secondary { background-color: #475569; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-.icon-btn { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; padding: 4px; margin-left: auto; }
-
-.badge-low { background-color: #ef4444; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
-.badge-ok { background-color: #10b981; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
-
+/* 13. 유틸리티 & 토스트 알림 */
 .hidden { display: none !important; }
 
-#toast { visibility: hidden; min-width: 250px; background-color: #10b981; color: white; text-align: center; border-radius: 8px; padding: 14px; position: fixed; z-index: 1000; left: 50%; bottom: -50px; transform: translateX(-50%); font-weight: bold; font-size: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s, bottom 0.3s; }
+#toast { visibility: hidden; min-width: 250px; background-color: var(--green); color: white; text-align: center; border-radius: 8px; padding: 14px; position: fixed; z-index: 1000; left: 50%; bottom: -50px; transform: translateX(-50%); font-weight: bold; font-size: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s, bottom 0.3s; }
 #toast.show { visibility: visible; opacity: 1; bottom: 30px; }
 
-.log-item { border-bottom: 1px solid #334155; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; }
+/* 14. 로그 리스트 */
+.log-item { border-bottom: 1px solid var(--border); padding: 12px 0; display: flex; justify-content: space-between; align-items: center; }
 .log-item:last-child { border-bottom: none; }
-.log-diff-plus { color: #10b981; font-weight: bold; }
-.log-diff-minus { color: #ef4444; font-weight: bold; }body { background-color: #0f172a; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; padding-bottom: 80px; }
-.container { max-width: 600px; margin: 0 auto; }
+.log-diff-plus { color: var(--green); font-weight: bold; }
+.log-diff-minus { color: var(--red); font-weight: bold; }
 
-.header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; gap: 8px; }
-
-.tab-container { display: flex; gap: 8px; background-color: #1e293b; padding: 6px; border-radius: 10px; margin-bottom: 16px; }
-.tab-btn { flex: 1; background: none; border: none; color: #94a3b8; padding: 10px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
-.tab-btn.active { background-color: #2563eb; color: white; }
-
-.search-group { display: flex; gap: 8px; margin-bottom: 12px; }
-.search-bar { padding: 10px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: white; font-size: 0.95rem; box-sizing: border-box; }
-.add-panel { background: #1e293b; padding: 12px; border-radius: 8px; border: 1px dashed #475569; margin-bottom: 16px; }
-
-.section-title { font-size: 0.9rem; font-weight: bold; color: #94a3b8; margin: 16px 0 8px 4px; border-bottom: 1px solid #334155; padding-bottom: 4px; }
-.fav-btn { background: none; border: none; color: #fbbf24; font-size: 1.5rem; margin-right: 4px; padding: 0; cursor: pointer; line-height: 1; }
-.fav-btn.outline { color: #475569; }
-
-.card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-.item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-.item-title { font-size: 1.1rem; font-weight: bold; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.cat-badge { background-color: #334155; color: #cbd5e1; font-size: 0.75rem; padding: 3px 6px; border-radius: 4px; font-weight: normal; }
-.item-meta { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; margin-left: 30px; }
-
-.stepper-group { display: flex; align-items: center; margin-bottom: 0px; }
-.stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; }
-.stepper-btn:active { background-color: #475569; }
-.stepper-input { flex: 1; height: 48px; background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 8px; margin: 0 10px; font-size: 1.2rem; text-align: center; font-weight: bold; }
-button { touch-action: manipulation; }
-
-input[type="text"], input[type="number"] { background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; padding: 10px; width: 100%; box-sizing: border-box; font-size: 0.95rem; }
-
-.btn-primary-small { background-color: #2563eb; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: background-color 0.2s; }
-.btn-primary-small:active { background-color: #1d4ed8; }
-
-.btn-success { background-color: #10b981; color: white; border: none; cursor: pointer; transition: background-color 0.2s; }
-.btn-success:active { background-color: #059669; }
-.btn-danger { background-color: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-.btn-secondary { background-color: #475569; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-.icon-btn { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; padding: 4px; margin-left: auto; }
-
-.badge-low { background-color: #ef4444; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
-.badge-ok { background-color: #10b981; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; white-space: nowrap; }
-
-.hidden { display: none !important; }
-
-#toast { visibility: hidden; min-width: 250px; background-color: #10b981; color: white; text-align: center; border-radius: 8px; padding: 14px; position: fixed; z-index: 1000; left: 50%; bottom: -50px; transform: translateX(-50%); font-weight: bold; font-size: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s, bottom 0.3s; }
-#toast.show { visibility: visible; opacity: 1; bottom: 30px; }
-
-.log-item { border-bottom: 1px solid #334155; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; }
-.log-item:last-child { border-bottom: none; }
-.log-diff-plus { color: #10b981; font-weight: bold; }
-.log-diff-minus { color: #ef4444; font-weight: bold; }
-
-/* Discord Toggle Switch */
+/* 15. Discord 토글 스위치 */
 .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
 .switch input { opacity: 0; width: 0; height: 0; }
-.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #334155; transition: .3s; border-radius: 20px; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border); transition: .3s; border-radius: 20px; }
 .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
-.switch input:checked + .slider { background-color: #2563eb; }
+.switch input:checked + .slider { background-color: var(--blue); }
 .switch input:checked + .slider:before { transform: translateX(16px); }
