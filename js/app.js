@@ -315,45 +315,36 @@ async function saveStock(id, name, beforeQty, minStock, unit) {
         item_name: name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
     }]);
     
-    const discordOn = document.getElementById('discord-toggle').checked;
-if (discordOn && DISCORD_WEBHOOK_URL) {
-        const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
-        const isLow = newQty <= minStock;
-        const color = isLow ? 0xef4444 : 0x10b981;
-        
-        let statusStr = '🟢 適正';
-        if (isLow) {
-            const shortage = Number((minStock - newQty).toFixed(2));
-            statusStr = `🔴 不足 (目標より **${shortage}${unit}** 不足)`;
-        }
-
-        // 불필요한 단어 제거 및 한줄 압축
-        let desc = `変更: ${beforeQty} → **${newQty}** (${diffStr}${unit})\n${statusStr}`;
-        if (note) desc += `\nメモ: 📝 ${note}`;
-
-        const embed = {
-            title: `📦 [在庫更新] ${name}`,
-            color: color,
-            description: desc,
-            timestamp: new Date().toISOString()
-        };
-
-        try {
-            await fetch(DISCORD_WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ embeds: [embed] })
-            });
-        } catch (e) {
-            console.error("Discord Error", e);
-        }
+const discordOn = document.getElementById('discord-toggle').checked;
+if (discordOn && DISCORD_RELAY_URL) {
+    const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
+    const isLow = newQty <= minStock;
+    const color = isLow ? 0xef4444 : 0x10b981;
+    
+    let statusStr = '🟢 適正';
+    if (isLow) {
+        const shortage = Number((minStock - newQty).toFixed(2));
+        statusStr = `🔴 不足 (目標より **${shortage}${unit}** 不足)`;
     }
-
-    addRecent(id);
-    showToast(`✅ ${name} 保存しました！`);
-    document.getElementById(`note_${id}`).value = ''; 
-    fetchInventory();
+    // 불필요한 단어 제거 및 한줄 압축
+    let desc = `変更: ${beforeQty} → **${newQty}** (${diffStr}${unit})\n${statusStr}`;
+    if (note) desc += `\nメモ: 📝 ${note}`;
+    const embed = {
+        title: `📦 [在庫更新] ${name}`,
+        color: color,
+        description: desc,
+        timestamp: new Date().toISOString()
+    };
+    fetch(DISCORD_RELAY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ embeds: [embed] })
+    }).catch(e => console.error("Discord Error", e));
 }
+addRecent(id);
+showToast(`✅ ${name} 保存しました！`);
+document.getElementById(`note_${id}`).value = ''; 
+fetchInventory();
 
 async function updateItem(id) {
     const category = document.getElementById(`edit_category_${id}`).value || '未分類';
