@@ -1,6 +1,5 @@
 const RAW_WEBHOOK = atob('aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUyNjY0NDg1NjQ3MzEyNDkxNC9yYVVpcS13V1dKX0FlcDV6dlhMelNTdXg3a040TnlsbF9wVmJvS0ZLQUhJT3BFQjNEY0RPSk1FSW1sTEJNU3JaYXk1WQ==');
 const DISCORD_WEBHOOK_URL = 'https://corsproxy.io/?' + encodeURIComponent(RAW_WEBHOOK);
-const isDiscordEnabled = document.getElementById('discord-toggle').checked;
 
 const SUPABASE_URL = 'https://dhwdwbhfgoupnxseansd.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_dZl-kSDklZZvEjKO25iV5Q_2kwyyRxI';
@@ -275,7 +274,8 @@ async function saveAllStock() {
         await Promise.all(updates);
         if (logs.length > 0) await supabaseClient.from('inventory_logs').insert(logs);
 
-        if (DISCORD_WEBHOOK_URL && discordFields.length > 0) {
+        const discordOn = document.getElementById('discord-toggle').checked;
+if (discordOn && DISCORD_WEBHOOK_URL && discordFields.length > 0) {
             const embed = {
                 title: `📦 [在庫一括更新] 計 ${totalDiffs}件`,
                 color: 0x3b82f6,
@@ -315,7 +315,8 @@ async function saveStock(id, name, beforeQty, minStock, unit) {
         item_name: name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
     }]);
     
-    if (DISCORD_WEBHOOK_URL) {
+    const discordOn = document.getElementById('discord-toggle').checked;
+if (discordOn && DISCORD_WEBHOOK_URL) {
         const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
         const isLow = newQty <= minStock;
         const color = isLow ? 0xef4444 : 0x10b981;
