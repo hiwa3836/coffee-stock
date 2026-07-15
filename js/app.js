@@ -47,6 +47,7 @@ function updateSyncTime() {
         info.innerText = `最終同期 : ${now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     }
 }
+
 /* =====================================================================
    2. UTILITIES
    ===================================================================== */
@@ -192,9 +193,21 @@ function renderSection(title, items) {
    ===================================================================== */
 async function fetchInventory() {
     const list = $("inventory-list");
-    if (list) list.innerHTML = `<p style="text-align:center; color:#94a3b8;">${TEXT.loading}</p>`;
+    
+    // 최초 실행 시(데이터가 비어있을 때)만 텍스트 로딩 표시
+    if (list && inventoryData.length === 0) {
+        list.innerHTML = `<p style="text-align:center; color:#94a3b8;">${TEXT.loading}</p>`;
+    }
+    
+    // 데이터 불러오는 동안 반투명 로딩 스피너 켜기
+    toggleLoading(true);
 
     const { data, error } = await supabaseClient.from('inventory').select('*').order('id');
+    
+    // 작업 완료 후 스피너 끄기 및 최종 동기화 시간 갱신
+    toggleLoading(false);
+    updateSyncTime();
+
     if (error) {
         showToast(`${TEXT.errLoad}: ${error.message}`);
         return;
@@ -255,9 +268,18 @@ function updateCategoryFilter() {
 
 async function fetchHistory() {
     const list = $("history-list");
-    if (list) list.innerHTML = `<p style="text-align:center; color:#94a3b8;">${TEXT.loading}</p>`;
+    
+    if (list && logsData.length === 0) {
+        list.innerHTML = `<p style="text-align:center; color:#94a3b8;">${TEXT.loading}</p>`;
+    }
+    
+    toggleLoading(true);
 
     const { data, error } = await supabaseClient.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(30);
+    
+    toggleLoading(false);
+    updateSyncTime();
+
     if (error) {
         showToast(`${TEXT.errLoad}: ${error.message}`);
         return;
