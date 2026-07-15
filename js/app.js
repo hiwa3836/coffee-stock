@@ -79,13 +79,19 @@ function addRecent(id) {
 }
 
 function triggerDownload(content, fileName) {
-    const encodedUri = encodeURI(content);
+    // data: URI 대신 Blob 방식 사용 (iOS Safari 등 모바일 환경 다운로드 안정성)
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.href = url;
     link.setAttribute("download", fileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    // 메모리 누수 방지: 다운로드 트리거 후 URL 해제
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* =====================================================================
@@ -583,7 +589,7 @@ async function addNewItem() {
 }
 
 function exportCSV(type) {
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    let csvContent = "\uFEFF"; // BOM만 유지 (엑셀 한글/일본어 깨짐 방지)
     if (type === 'current') {
         csvContent += "分類,商品名,現在在庫,目標値,単位\n";
         inventoryData.forEach(r => { csvContent += `"${r.category}","${r.item_name}",${r.current_stock},${r.min_stock},"${r.unit}"\n`; });
@@ -624,5 +630,33 @@ setInterval(() => {
     }
 }, 30000);
 
-// App Start
-fetchInventory();
+/* =====================================================================
+   8. ACCESS GATE (URL만으로 우연히 들어오는 것을 막는 최소한의 장치.
+      진짜 보안은 아니며 Supabase RLS 설정과는 별개로 항상 함께 확인할 것)
+   ===================================================================== */
+function unlockApp() {
+    $("gate-overlay").classList.add("hidden");
+    $("main-container").classList.remove("hidden");
+    fetchInventory();
+}
+
+function checkAccessCode() {
+    const input = $("gate-input").value.trim();
+    if (input === window.CONFIG.ACCESS_CODE) {
+        localStorage.setItem('rcs_authed', '1');
+        unlockApp();
+    } else {
+        $("gate-error").innerText = "コードが違います";
+        $("gate-input").value = '';
+    }
+}
+
+// Enter 키로도 제출 가능하게
+$("gate-input") && $("gate-input").addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') checkAccessCode();
+});
+
+// App Start: 이전에 인증된 세션이면 바로 통과, 아니면 게이트에서 대기
+if (localStorage.getItem('rcs_authed') === '1') {
+    unlockApp();
+}
