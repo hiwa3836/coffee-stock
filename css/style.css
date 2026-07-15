@@ -36,6 +36,7 @@ h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; gap: 8px;
 .stepper-group { display: flex; align-items: center; margin-bottom: 0px; }
 .stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; }
 .stepper-btn:active { background-color: #475569; }
+.stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; touch-action: manipulation; }
 .stepper-input { flex: 1; height: 48px; background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 8px; margin: 0 10px; font-size: 1.2rem; text-align: center; font-weight: bold; }
 
 input[type="text"], input[type="number"] { background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; padding: 10px; width: 100%; box-sizing: border-box; font-size: 0.95rem; }
@@ -88,6 +89,7 @@ h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; gap: 8px;
 .stepper-btn { background-color: #334155; color: white; width: 48px; height: 48px; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; }
 .stepper-btn:active { background-color: #475569; }
 .stepper-input { flex: 1; height: 48px; background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 8px; margin: 0 10px; font-size: 1.2rem; text-align: center; font-weight: bold; }
+button { touch-action: manipulation; }
 
 input[type="text"], input[type="number"] { background-color: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; padding: 10px; width: 100%; box-sizing: border-box; font-size: 0.95rem; }
 
