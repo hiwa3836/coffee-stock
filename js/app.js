@@ -183,6 +183,14 @@ function createCard(item) {
     `;
 }
 
+// [핵심 최적화] 전체 DOM을 부수지 않고, 특정 카드 1개의 HTML만 교체합니다.
+function updateCardDOM(item) {
+    const card = $(`card_${item.id}`);
+    if (card) {
+        card.outerHTML = createCard(item);
+    }
+}
+
 function renderSection(title, items) {
     if (items.length === 0) return '';
     return `<div class="section-title">${title}</div>${items.map(createCard).join('')}`;
@@ -212,7 +220,7 @@ async function fetchInventory(isSilent = false) {
     
     inventoryData = data;
     updateCategoryFilter();
-    renderInventory();
+    renderInventory(); // 최초 조회 및 검색 필터 시에만 전체 렌더링 호출
 }
 
 function renderInventory() {
@@ -369,26 +377,30 @@ async function saveStock(id) {
         return;
     }
 
-    // 1. 낙관적 업데이트 즉시 적용 및 렌더링
+    // 1. 낙관적 업데이트 즉시 적용 및 개별 카드만 업데이트
     item.current_stock = newQty;
     addRecent(id);
-    renderInventory();
+    updateCardDOM(item); 
     showToast(`✅ ${item.item_name} ${TEXT.save}`);
-    $(`note_${id}`).value = ''; 
 
     // 2. 백그라운드 저장 로직 수행
     const { error: updateError } = await supabaseClient.from('inventory').update({ current_stock: newQty }).eq('id', id);
     if (updateError) {
-        // 실패 시 롤백
+        // DB 통신 실패 시 상태 롤백
         item.current_stock = beforeQty;
-        renderInventory();
+        updateCardDOM(item);
         showToast(`${TEXT.errSave}: ${updateError.message}`);
         return;
     }
 
-    await supabaseClient.from('inventory_logs').insert([{
-        item_name: item.item_name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
-    }]);
+    // 로그 저장은 실패해도 메인 재고 업데이트를 무효화하지 않음 (오류 분리)
+    try {
+        await supabaseClient.from('inventory_logs').insert([{
+            item_name: item.item_name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
+        }]);
+    } catch (e) {
+        console.error("Log Insert Error:", e);
+    }
     
     const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
     const isLow = newQty <= minStock;
@@ -429,9 +441,10 @@ async function saveAllStock() {
             totalDiffs++;
             rollbackData.push({ item, beforeQty });
 
-            // 1. 낙관적 업데이트 즉시 적용
+            // 1. 낙관적 업데이트 즉시 적용 및 개별 카드 렌더링
             item.current_stock = newQty;
             addRecent(item.id);
+            updateCardDOM(item);
 
             updates.push(supabaseClient.from('inventory').update({ current_stock: newQty }).eq('id', item.id));
             logs.push({ item_name: item.item_name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note });
@@ -457,25 +470,28 @@ async function saveAllStock() {
         return;
     }
 
-    // 변경 내역 즉시 렌더링
-    renderInventory();
     showToast(`✅ ${totalDiffs}件のデータを一括保存しました！`);
 
     // 2. 백그라운드 통신 처리
     try {
         await Promise.all(updates);
-        if (logs.length > 0) await supabaseClient.from('inventory_logs').insert(logs);
+        
+        try {
+            if (logs.length > 0) await supabaseClient.from('inventory_logs').insert(logs);
+        } catch (e) {
+            console.error("Log Insert Error:", e);
+        }
 
         if (discordFields.length > 0) {
             const embed = buildDiscordEmbed(`📦 [在庫一括更新] 計 ${totalDiffs}件`, 0x3b82f6, "", discordFields.slice(0, MAX_DISCORD_FIELDS));
             await sendDiscord([embed]);
         }
     } catch (error) {
-        // 실패 시 전체 롤백
+        // 실패 시 개별 카드 단위로 롤백 진행
         for (const backup of rollbackData) {
             backup.item.current_stock = backup.beforeQty;
+            updateCardDOM(backup.item);
         }
-        renderInventory();
         showToast(`${TEXT.errSave}: ${error.message}`);
     }
 }
@@ -492,13 +508,13 @@ async function updateItem(id) {
     const min = $(`edit_min_${id}`).value;
     const unit = $(`edit_unit_${id}`).value;
 
-    // 1. 낙관적 업데이트
+    // 1. 낙관적 업데이트 적용 (이때 뷰 모드로 자동 전환됨)
     item.category = category;
     item.item_name = name;
     item.min_stock = min;
     item.unit = unit;
     
-    renderInventory();
+    updateCardDOM(item);
     showToast(`✅ ${TEXT.save}`);
 
     // 2. 백그라운드 업데이트
@@ -508,7 +524,7 @@ async function updateItem(id) {
 
     if (error) {
         Object.assign(item, backup);
-        renderInventory();
+        updateCardDOM(item); // 실패 시 편집창이 아니라 이전 데이터 상태의 뷰 모드로 롤백
         showToast(`${TEXT.errUpdate}: ${error.message}`);
     }
 }
@@ -519,18 +535,18 @@ async function deleteItem(id) {
     const index = inventoryData.findIndex(i => i.id === id);
     if (index === -1) return;
 
-    // 백업 생성
     const backupItem = inventoryData[index];
 
-    // 1. 메모리에서 즉시 삭제 및 렌더링
+    // 1. 메모리에서 삭제 및 DOM에서 대상 카드만 즉시 제거 (전체 렌더 방지)
     inventoryData.splice(index, 1);
-    renderInventory();
+    const cardEl = $(`card_${id}`);
+    if (cardEl) cardEl.remove();
 
     // 2. 백그라운드 통신
     const { error } = await supabaseClient.from('inventory').delete().eq('id', id);
     
     if (error) {
-        // 복구
+        // 복구: 메모리에 다시 넣고 전체 리렌더링 (단일 롤백 처리를 위해)
         inventoryData.splice(index, 0, backupItem);
         renderInventory();
         showToast(`${TEXT.errDel}: ${error.message}`);
@@ -545,7 +561,6 @@ async function addNewItem() {
 
     if (!name.trim()) return showToast(TEXT.reqName);
 
-    // 신규 생성은 DB 발급 ID가 필요하므로 insert 후 반환(select)을 대기
     const { data, error } = await supabaseClient.from('inventory').insert([{
         category: category, item_name: name, current_stock: 0, min_stock: min, unit: unit
     }]).select();
@@ -558,7 +573,7 @@ async function addNewItem() {
         toggleAddPanel();
         showToast(`✅ ${name} 追加しました`);
         
-        // 반환된 데이터를 메모리에 즉각 반영
+        // 아이템 신규 추가 시에만 전체 렌더링 호출 (구조 변경이 크므로)
         if (data && data.length > 0) {
             inventoryData.push(data[0]);
             updateCategoryFilter();
