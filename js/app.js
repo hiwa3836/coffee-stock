@@ -1,112 +1,136 @@
-const DISCORD_RELAY_URL = 'https://rcs-stock.yo9439.workers.dev';
+/* =====================================================================
+   1. CONSTANTS & STATE
+   ===================================================================== */
+const MAX_RECENTS = 5;
+const TOAST_TIME = 2500;
+const MAX_DISCORD_FIELDS = 25;
 
-const SUPABASE_URL = 'https://dhwdwbhfgoupnxseansd.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_dZl-kSDklZZvEjKO25iV5Q_2kwyyRxI';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const TEXT = {
+    save: "保存しました",
+    low: "不足",
+    ok: "適正",
+    change: "変更",
+    noChange: "変更された項目がありません。",
+    delConfirm: "本当に削除しますか？",
+    loading: "Loading...",
+    noData: "該当するアイテムがありません。",
+    noHistory: "履歴がありません。",
+    reqName: "商品名を入力してください。",
+    errLoad: "ロード失敗",
+    errSave: "保存エラー",
+    errDel: "削除エラー",
+    errUpdate: "更新エラー"
+};
+
+const supabaseClient = window.supabase.createClient(window.CONFIG.SUPABASE_URL, window.CONFIG.SUPABASE_KEY);
 
 let inventoryData = [];
 let logsData = [];
 let favs = JSON.parse(localStorage.getItem('rcs_favs') || '[]');
 let recents = JSON.parse(localStorage.getItem('rcs_recents') || '[]');
+let toastTimer;
 
-function switchTab(tab) {
-    document.getElementById('tab-update-btn').classList.remove('active');
-    document.getElementById('tab-history-btn').classList.remove('active');
-    document.getElementById('tab-update').classList.add('hidden');
-    document.getElementById('tab-history').classList.add('hidden');
+/* =====================================================================
+   2. UTILITIES
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const num = value => Number(value);
 
-    if (tab === 'update') {
-        document.getElementById('tab-update-btn').classList.add('active');
-        document.getElementById('tab-update').classList.remove('hidden');
-        fetchInventory();
-    } else {
-        document.getElementById('tab-history-btn').classList.add('active');
-        document.getElementById('tab-history').classList.remove('hidden');
-        fetchHistory();
-    }
+function showToast(msg) {
+    const toast = $("toast");
+    if (!toast) return;
+    clearTimeout(toastTimer);
+    toast.innerText = msg;
+    toast.classList.add("show");
+    toastTimer = setTimeout(() => {
+        toast.classList.remove("show");
+    }, TOAST_TIME);
 }
 
-async function fetchInventory() {
-    const { data, error } = await supabaseClient.from('inventory').select('*').order('id');
-    if (error) return alert('ロード失敗: ' + error.message);
-    inventoryData = data;
-    
-    updateCategoryFilter();
-    renderInventory();
-}
-
-function normalizeKana(str) {
-    return str.replace(/[\u3041-\u3096]/g, function(match) {
-        return String.fromCharCode(match.charCodeAt(0) + 0x60);
-    }).toLowerCase();
-}
-
-function toggleFav(id) {
-    if(navigator.vibrate) navigator.vibrate(20);
-    if(favs.includes(id)) favs = favs.filter(x => x !== id);
-    else favs.push(id);
-    localStorage.setItem('rcs_favs', JSON.stringify(favs));
-    renderInventory();
+function normalizeKana(str = "") {
+    return str.trim()
+              .replace(/[\u3041-\u3096]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
+              .toLowerCase();
 }
 
 function addRecent(id) {
     recents = recents.filter(x => x !== id);
     recents.unshift(id);
-    if(recents.length > 5) recents.pop();
+    if (recents.length > MAX_RECENTS) recents.pop();
     localStorage.setItem('rcs_recents', JSON.stringify(recents));
 }
 
-function showToast(msg) {
-    const toast = document.getElementById("toast");
-    toast.innerText = msg;
-    toast.className = "show";
-    setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 2500);
+function triggerDownload(content, fileName) {
+    const encodedUri = encodeURI(content);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
-function updateCategoryFilter() {
-    const filter = document.getElementById('category-filter');
-    const currentVal = filter.value;
-    const uniqueCats = [...new Set(inventoryData.map(item => item.category))].filter(Boolean);
-    
-    let options = '<option value="すべて">全分類</option>';
-    uniqueCats.forEach(cat => { options += `<option value="${cat}">${cat}</option>`; });
-    filter.innerHTML = options;
-    
-    if (uniqueCats.includes(currentVal)) filter.value = currentVal;
+/* =====================================================================
+   3. DISCORD INTEGRATION
+   ===================================================================== */
+function buildDiscordEmbed(title, color, description, fields = []) {
+    return { title, color, description, fields, timestamp: new Date().toISOString() };
+}
+
+async function sendDiscord(embeds) {
+    const toggle = $("discord-toggle");
+    if (!toggle || !toggle.checked || !window.CONFIG.DISCORD_RELAY_URL) return;
+
+    try {
+        await fetch(window.CONFIG.DISCORD_RELAY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ embeds })
+        });
+    } catch (e) {
+        console.error("Discord Error", e);
+    }
+}
+
+/* =====================================================================
+   4. UI COMPONENTS (Card & Sections)
+   ===================================================================== */
+function createBadge(item) {
+    const isLow = num(item.current_stock) <= num(item.min_stock);
+    return isLow ? `<span class="badge-low">${TEXT.low}</span>` : `<span class="badge-ok">${TEXT.ok}</span>`;
+}
+
+function createFavoriteButton(item) {
+    const isFav = favs.includes(item.id);
+    return `<button class="fav-btn ${isFav ? '' : 'outline'}" data-action="toggleFav" data-id="${item.id}">${isFav ? '★' : '☆'}</button>`;
 }
 
 function createCard(item) {
-    const isLow = parseFloat(item.current_stock) <= parseFloat(item.min_stock);
-    const badge = isLow ? '<span class="badge-low">不足</span>' : '<span class="badge-ok">適正</span>';
     const catTag = item.category ? `<span class="cat-badge">${item.category}</span>` : '';
-    const isFav = favs.includes(item.id);
-    const favClass = isFav ? 'fav-btn' : 'fav-btn outline';
-    const favIcon = isFav ? '★' : '☆';
-    
     return `
         <div class="card" id="card_${item.id}">
             <div id="view_${item.id}">
                 <div class="item-header">
                     <div>
                         <div class="item-title">
-                            <button class="${favClass}" onclick="toggleFav(${item.id})">${favIcon}</button>
+                            ${createFavoriteButton(item)}
                             ${catTag} ${item.item_name}
-                            <button class="icon-btn" onclick="toggleEdit(${item.id})">⚙️</button>
+                            <button class="icon-btn" data-action="toggleEdit" data-id="${item.id}">⚙️</button>
                         </div>
                         <div class="item-meta">現在: <strong style="color:white; font-size:1.05rem;">${item.current_stock}</strong> ${item.unit} / 目標: ${item.min_stock}</div>
                     </div>
-                    ${badge}
+                    ${createBadge(item)}
                 </div>
                 
                 <div class="stepper-group">
-                    <button class="stepper-btn" onclick="adjustStock(${item.id}, -1)">−</button>
+                    <button class="stepper-btn" data-action="adjustStock" data-id="${item.id}" data-amount="-1">−</button>
                     <input type="number" class="stepper-input" id="input_${item.id}" value="${item.current_stock}" step="0.1">
-                    <button class="stepper-btn" onclick="adjustStock(${item.id}, 1)">＋</button>
+                    <button class="stepper-btn" data-action="adjustStock" data-id="${item.id}" data-amount="1">＋</button>
                 </div>
                 
                 <div style="display: flex; gap: 8px; margin-top: 12px;">
                     <input type="text" id="note_${item.id}" placeholder="メモ (例: 2/3残し)" style="flex: 1; margin-bottom: 0; height: 48px;">
-                    <button class="btn-success" style="width: 48px; height: 48px; margin-top: 0; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border-radius: 8px;" onclick="saveStock(${item.id}, '${item.item_name}', ${item.current_stock}, ${item.min_stock}, '${item.unit}')">💾</button>
+                    <button class="btn-success" style="width: 48px; height: 48px; margin-top: 0; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border-radius: 8px;" data-action="saveStock" data-id="${item.id}">💾</button>
                 </div>
             </div>
 
@@ -132,20 +156,46 @@ function createCard(item) {
                     </div>
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button class="btn-success" style="flex:2; margin-top:0; padding:10px; border-radius:8px; font-weight:bold;" onclick="updateItem(${item.id})">更新</button>
-                    <button class="btn-danger" style="flex:1;" onclick="deleteItem(${item.id})">削除</button>
-                    <button class="btn-secondary" style="flex:1;" onclick="toggleEdit(${item.id})">取消</button>
+                    <button class="btn-success" style="flex:2; margin-top:0; padding:10px; border-radius:8px; font-weight:bold;" data-action="updateItem" data-id="${item.id}">更新</button>
+                    <button class="btn-danger" style="flex:1;" data-action="deleteItem" data-id="${item.id}">削除</button>
+                    <button class="btn-secondary" style="flex:1;" data-action="toggleEdit" data-id="${item.id}">取消</button>
                 </div>
             </div>
         </div>
     `;
 }
 
+function renderSection(title, items) {
+    if (items.length === 0) return '';
+    return `<div class="section-title">${title}</div>${items.map(createCard).join('')}`;
+}
+
+/* =====================================================================
+   5. CORE LOGIC (Fetch, Render, Actions)
+   ===================================================================== */
+async function fetchInventory() {
+    const list = $("inventory-list");
+    if (list) list.innerHTML = `<p style="text-align:center; color:#94a3b8;">${TEXT.loading}</p>`;
+
+    const { data, error } = await supabaseClient.from('inventory').select('*').order('id');
+    if (error) {
+        showToast(`${TEXT.errLoad}: ${error.message}`);
+        return;
+    }
+    
+    inventoryData = data;
+    updateCategoryFilter();
+    renderInventory();
+}
+
 function renderInventory() {
-    const queryRaw = document.getElementById('search-input').value;
+    const list = $("inventory-list");
+    if (!list) return;
+
+    const queryRaw = $("search-input") ? $("search-input").value : "";
     const query = normalizeKana(queryRaw);
-    const selectedCat = document.getElementById('category-filter').value;
-    const list = document.getElementById('inventory-list');
+    const filterEl = $("category-filter");
+    const selectedCat = filterEl ? filterEl.value : 'すべて';
     
     const filtered = inventoryData.filter(item => {
         const matchName = normalizeKana(item.item_name).includes(query);
@@ -154,11 +204,11 @@ function renderInventory() {
     });
     
     if (filtered.length === 0) {
-        list.innerHTML = '<p style="text-align:center; color:#94a3b8;">該当するアイテムがありません。</p>';
+        list.innerHTML = `<p style="text-align:center; color:#94a3b8;">${TEXT.noData}</p>`;
         return;
     }
 
-    if(query !== '' || selectedCat !== 'すべて') {
+    if (query !== '' || selectedCat !== 'すべて') {
         list.innerHTML = filtered.map(createCard).join('');
         return;
     }
@@ -167,24 +217,43 @@ function renderInventory() {
     const recentItems = filtered.filter(i => recents.includes(i.id) && !favs.includes(i.id)).sort((a,b) => recents.indexOf(a.id) - recents.indexOf(b.id)); 
     const otherItems = filtered.filter(i => !favs.includes(i.id) && !recents.includes(i.id));
 
-    let finalHtml = '';
-    if(favItems.length > 0) finalHtml += `<div class="section-title">⭐ お気に入り</div>` + favItems.map(createCard).join('');
-    if(recentItems.length > 0) finalHtml += `<div class="section-title">🕒 最近使った項目</div>` + recentItems.map(createCard).join('');
-    if(otherItems.length > 0) finalHtml += `<div class="section-title">📦 全てのアイテム</div>` + otherItems.map(createCard).join('');
+    list.innerHTML = 
+        renderSection("⭐ お気に入り", favItems) +
+        renderSection("🕒 最近使った項目", recentItems) +
+        renderSection("📦 全てのアイテム", otherItems);
+}
 
-    list.innerHTML = finalHtml;
+function updateCategoryFilter() {
+    const filter = $("category-filter");
+    if (!filter) return;
+    const currentVal = filter.value;
+    const uniqueCats = [...new Set(inventoryData.map(item => item.category))].filter(Boolean);
+    
+    let options = '<option value="すべて">全分類</option>';
+    uniqueCats.forEach(cat => { options += `<option value="${cat}">${cat}</option>`; });
+    filter.innerHTML = options;
+    
+    if (uniqueCats.includes(currentVal)) filter.value = currentVal;
 }
 
 async function fetchHistory() {
+    const list = $("history-list");
+    if (list) list.innerHTML = `<p style="text-align:center; color:#94a3b8;">${TEXT.loading}</p>`;
+
     const { data, error } = await supabaseClient.from('inventory_logs').select('*').order('created_at', { ascending: false }).limit(30);
-    if (error) return alert('履歴ロード失敗: ' + error.message);
+    if (error) {
+        showToast(`${TEXT.errLoad}: ${error.message}`);
+        return;
+    }
     logsData = data;
 
-    const list = document.getElementById('history-list');
-    if (data.length === 0) { list.innerHTML = '<p style="text-align:center; color:#94a3b8;">履歴がありません。</p>'; return; }
+    if (data.length === 0) {
+        list.innerHTML = `<p style="text-align:center; color:#94a3b8;">${TEXT.noHistory}</p>`;
+        return;
+    }
     
     list.innerHTML = data.map(r => {
-        const diff = parseFloat(r.diff_qty);
+        const diff = num(r.diff_qty);
         const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
         const diffClass = diff > 0 ? 'log-diff-plus' : 'log-diff-minus';
         const noteStr = r.note ? `<br><small style="color:#60a5fa;">📝 ${r.note}</small>` : '';
@@ -203,25 +272,98 @@ async function fetchHistory() {
     }).join('');
 }
 
+/* =====================================================================
+   6. CRUD & DOM INTERACTIONS
+   ===================================================================== */
 function adjustStock(id, amount) {
     if (navigator.vibrate) navigator.vibrate(50);
-    const input = document.getElementById(`input_${id}`);
-    let newVal = parseFloat(input.value) + amount;
-    if (newVal < 0) newVal = 0; 
-    input.value = Number(newVal.toFixed(2));
+    const input = $(`input_${id}`);
+    if (!input) return;
+    let newVal = num(input.value) + num(amount);
+    input.value = Number(Math.max(0, newVal).toFixed(2));
 }
 
 function toggleEdit(id) {
-    document.getElementById(`view_${id}`).classList.toggle('hidden');
-    document.getElementById(`edit_${id}`).classList.toggle('hidden');
+    $(`view_${id}`).classList.toggle('hidden');
+    $(`edit_${id}`).classList.toggle('hidden');
 }
 
 function toggleAddPanel() {
-    document.getElementById('add-panel').classList.toggle('hidden');
-    document.getElementById('show-add-btn').classList.toggle('hidden');
+    $("add-panel").classList.toggle('hidden');
+    $("show-add-btn").classList.toggle('hidden');
 }
 
-// 일괄 저장 로직 (디스코드 한줄 압축)
+function toggleFav(id) {
+    if (navigator.vibrate) navigator.vibrate(20);
+    if (favs.includes(id)) favs = favs.filter(x => x !== id);
+    else favs.push(id);
+    localStorage.setItem('rcs_favs', JSON.stringify(favs));
+    renderInventory();
+}
+
+function switchTab(tab) {
+    $("tab-update-btn").classList.remove('active');
+    $("tab-history-btn").classList.remove('active');
+    $("tab-update").classList.add('hidden');
+    $("tab-history").classList.add('hidden');
+
+    if (tab === 'update') {
+        $("tab-update-btn").classList.add('active');
+        $("tab-update").classList.remove('hidden');
+        fetchInventory();
+    } else {
+        $("tab-history-btn").classList.add('active');
+        $("tab-history").classList.remove('hidden');
+        fetchHistory();
+    }
+}
+
+async function saveStock(id) {
+    const item = inventoryData.find(i => i.id === id);
+    if (!item) return;
+
+    const beforeQty = num(item.current_stock);
+    const minStock = num(item.min_stock);
+    const newQty = num($(`input_${id}`).value);
+    const note = $(`note_${id}`).value;
+    const diff = Number((newQty - beforeQty).toFixed(2));
+
+    if (diff === 0 && !note) {
+        showToast(TEXT.noChange);
+        return;
+    }
+
+    const { error: updateError } = await supabaseClient.from('inventory').update({ current_stock: newQty }).eq('id', id);
+    if (updateError) {
+        showToast(`${TEXT.errSave}: ${updateError.message}`);
+        return;
+    }
+
+    await supabaseClient.from('inventory_logs').insert([{
+        item_name: item.item_name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
+    }]);
+    
+    const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
+    const isLow = newQty <= minStock;
+    let statusStr = `🟢 ${TEXT.ok}`;
+    
+    if (isLow) {
+        const shortage = Number((minStock - newQty).toFixed(2));
+        statusStr = `🔴 ${TEXT.low} (目標より **${shortage}${item.unit}** ${TEXT.low})`;
+    }
+
+    let desc = `${TEXT.change}: ${beforeQty} → **${newQty}** (${diffStr}${item.unit})\n${statusStr}`;
+    if (note) desc += `\nメモ: 📝 ${note}`;
+
+    const embed = buildDiscordEmbed(`📦 [在庫更新] ${item.item_name}`, isLow ? 0xef4444 : 0x10b981, desc);
+    await sendDiscord([embed]);
+
+    addRecent(id);
+    showToast(`✅ ${item.item_name} ${TEXT.save}`);
+    $(`note_${id}`).value = ''; 
+    fetchInventory();
+}
+
 async function saveAllStock() {
     if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
 
@@ -231,33 +373,31 @@ async function saveAllStock() {
     let totalDiffs = 0;
 
     for (const item of inventoryData) {
-        const inputEl = document.getElementById(`input_${item.id}`);
-        const noteEl = document.getElementById(`note_${item.id}`);
+        const inputEl = $(`input_${item.id}`);
+        const noteEl = $(`note_${item.id}`);
         if (!inputEl) continue;
 
-        const beforeQty = parseFloat(item.current_stock);
-        const newQty = parseFloat(inputEl.value);
+        const beforeQty = num(item.current_stock);
+        const newQty = num(inputEl.value);
         const note = noteEl ? noteEl.value : '';
         const diff = Number((newQty - beforeQty).toFixed(2));
 
         if (diff !== 0 || note !== '') {
             totalDiffs++;
-            
             updates.push(supabaseClient.from('inventory').update({ current_stock: newQty }).eq('id', item.id));
             logs.push({ item_name: item.item_name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note });
             addRecent(item.id);
 
             const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
-            const isLow = newQty <= parseFloat(item.min_stock);
+            const isLow = newQty <= num(item.min_stock);
+            let statusStr = `🟢 ${TEXT.ok}`;
             
-            let statusStr = '🟢 適正';
             if (isLow) {
-                const shortage = Number((parseFloat(item.min_stock) - newQty).toFixed(2));
-                statusStr = `🔴 不足 (目標より ${shortage}${item.unit} 不足)`;
+                const shortage = Number((num(item.min_stock) - newQty).toFixed(2));
+                statusStr = `🔴 ${TEXT.low} (目標より ${shortage}${item.unit} ${TEXT.low})`;
             }
             
-            // 깔끔한 한 줄 렌더링
-            let fieldVal = `変更: ${beforeQty} → **${newQty}** (${diffStr}${item.unit})\n${statusStr}`;
+            let fieldVal = `${TEXT.change}: ${beforeQty} → **${newQty}** (${diffStr}${item.unit})\n${statusStr}`;
             if (note) fieldVal += `\nメモ: 📝 ${note}`;
             
             discordFields.push({ name: `🔹 ${item.item_name}`, value: fieldVal, inline: false });
@@ -265,7 +405,7 @@ async function saveAllStock() {
     }
 
     if (totalDiffs === 0) {
-        showToast('変更された項目がありません。');
+        showToast(TEXT.noChange);
         return;
     }
 
@@ -273,121 +413,62 @@ async function saveAllStock() {
         await Promise.all(updates);
         if (logs.length > 0) await supabaseClient.from('inventory_logs').insert(logs);
 
-        const discordOn = document.getElementById('discord-toggle').checked;
-        if (discordOn && DISCORD_RELAY_URL && discordFields.length > 0) {
-            const embed = {
-                title: `📦 [在庫一括更新] 計 ${totalDiffs}件`,
-                color: 0x3b82f6,
-                fields: discordFields.slice(0, 25),
-                timestamp: new Date().toISOString()
-            };
-
-            fetch(DISCORD_RELAY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ embeds: [embed] })
-            }).catch(e => console.error("Discord Error", e));
+        if (discordFields.length > 0) {
+            const embed = buildDiscordEmbed(`📦 [在庫一括更新] 計 ${totalDiffs}件`, 0x3b82f6, "", discordFields.slice(0, MAX_DISCORD_FIELDS));
+            await sendDiscord([embed]);
         }
 
         showToast(`✅ ${totalDiffs}件のデータを一括保存しました！`);
         fetchInventory(); 
     } catch (error) {
-        alert('一括保存エラー: ' + error.message);
+        showToast(`${TEXT.errSave}: ${error.message}`);
     }
-}
-
-// 개별 저장 로직 (디스코드 한줄 압축)
-async function saveStock(id, name, beforeQty, minStock, unit) {
-    const newQty = parseFloat(document.getElementById(`input_${id}`).value);
-    const note = document.getElementById(`note_${id}`).value;
-    const diff = Number((newQty - beforeQty).toFixed(2));
-
-    if (diff === 0 && !note) {
-        showToast('変更内容がありません。');
-        return;
-    }
-
-    const { error: updateError } = await supabaseClient.from('inventory').update({ current_stock: newQty }).eq('id', id);
-    if (updateError) return alert('更新エラー: ' + updateError.message);
-
-    const { error: logError } = await supabaseClient.from('inventory_logs').insert([{
-        item_name: name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
-    }]);
-    
-    const discordOn = document.getElementById('discord-toggle').checked;
-    if (discordOn && DISCORD_RELAY_URL) {
-        const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
-        const isLow = newQty <= minStock;
-        const color = isLow ? 0xef4444 : 0x10b981;
-        
-        let statusStr = '🟢 適正';
-        if (isLow) {
-            const shortage = Number((minStock - newQty).toFixed(2));
-            statusStr = `🔴 不足 (目標より **${shortage}${unit}** 不足)`;
-        }
-
-        // 불필요한 단어 제거 및 한줄 압축
-        let desc = `変更: ${beforeQty} → **${newQty}** (${diffStr}${unit})\n${statusStr}`;
-        if (note) desc += `\nメモ: 📝 ${note}`;
-
-        const embed = {
-            title: `📦 [在庫更新] ${name}`,
-            color: color,
-            description: desc,
-            timestamp: new Date().toISOString()
-        };
-
-        fetch(DISCORD_RELAY_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ embeds: [embed] })
-        }).catch(e => console.error("Discord Error", e));
-    }
-
-    addRecent(id);
-    showToast(`✅ ${name} 保存しました！`);
-    document.getElementById(`note_${id}`).value = ''; 
-    fetchInventory();
 }
 
 async function updateItem(id) {
-    const category = document.getElementById(`edit_category_${id}`).value || '未分類';
-    const name = document.getElementById(`edit_name_${id}`).value;
-    const min = document.getElementById(`edit_min_${id}`).value;
-    const unit = document.getElementById(`edit_unit_${id}`).value;
+    const category = $(`edit_category_${id}`).value || '未分類';
+    const name = $(`edit_name_${id}`).value;
+    const min = $(`edit_min_${id}`).value;
+    const unit = $(`edit_unit_${id}`).value;
 
     const { error } = await supabaseClient.from('inventory').update({
         category: category, item_name: name, min_stock: min, unit: unit
     }).eq('id', id);
 
-    if (error) alert('更新エラー: ' + error.message);
-    else fetchInventory();
+    if (error) {
+        showToast(`${TEXT.errUpdate}: ${error.message}`);
+    } else {
+        showToast(`✅ ${TEXT.save}`);
+        fetchInventory();
+    }
 }
 
 async function deleteItem(id) {
-    if (!confirm('本当に削除しますか？')) return;
+    if (!confirm(TEXT.delConfirm)) return;
     const { error } = await supabaseClient.from('inventory').delete().eq('id', id);
-    if (error) alert('削除エラー: ' + error.message);
+    if (error) showToast(`${TEXT.errDel}: ${error.message}`);
     else fetchInventory();
 }
 
 async function addNewItem() {
-    const category = document.getElementById('add_category').value || '未分類';
-    const name = document.getElementById('add_name').value;
-    const min = document.getElementById('add_min').value || 0;
-    const unit = document.getElementById('add_unit').value || '個';
+    const category = $('add_category').value || '未分類';
+    const name = $('add_name').value;
+    const min = $('add_min').value || 0;
+    const unit = $('add_unit').value || '個';
 
-    if (!name.trim()) return alert('商品名を入力してください。');
+    if (!name.trim()) return showToast(TEXT.reqName);
 
     const { error } = await supabaseClient.from('inventory').insert([{
         category: category, item_name: name, current_stock: 0, min_stock: min, unit: unit
     }]);
 
-    if (error) alert('登録エラー: ' + error.message);
-    else {
-        document.getElementById('add_name').value = '';
-        document.getElementById('add_category').value = '';
+    if (error) {
+        showToast(`${TEXT.errSave}: ${error.message}`);
+    } else {
+        $('add_name').value = '';
+        $('add_category').value = '';
         toggleAddPanel();
+        showToast(`✅ ${name} 追加しました`);
         fetchInventory();
     }
 }
@@ -405,14 +486,26 @@ function exportCSV(type) {
     }
 }
 
-function triggerDownload(content, fileName) {
-    const encodedUri = encodeURI(content);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
+/* =====================================================================
+   7. EVENT DELEGATION & INITIALIZATION
+   ===================================================================== */
+// HTML에서 inline onclick 이벤트들을 스크립트로 중앙 관리
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    
+    const action = btn.getAttribute('data-action');
+    const id = num(btn.getAttribute('data-id'));
+    
+    switch(action) {
+        case 'toggleFav': toggleFav(id); break;
+        case 'toggleEdit': toggleEdit(id); break;
+        case 'adjustStock': adjustStock(id, btn.getAttribute('data-amount')); break;
+        case 'saveStock': saveStock(id); break;
+        case 'updateItem': updateItem(id); break;
+        case 'deleteItem': deleteItem(id); break;
+    }
+});
 
+// App Start
 fetchInventory();
