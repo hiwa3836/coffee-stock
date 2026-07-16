@@ -120,6 +120,11 @@ async function sendDiscord(embeds) {
    5. CORE LOGIC (Fetch, Render, Actions)
    ===================================================================== */
 
+function renderSection(title, items) {
+    if (items.length === 0) return '';
+    return `<div class="section-title">${title}</div>${items.map(createCard).join('')}`;
+}
+
 // 사용자가 카드를 조작 중인지 판별하는 최적화 헬퍼 함수
 function isUserEditingCard(id) {
     const inputEl = $(`input_${id}`);
