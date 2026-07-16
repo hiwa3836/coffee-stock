@@ -117,94 +117,27 @@ async function sendDiscord(embeds) {
 }
 
 /* =====================================================================
-   4. UI COMPONENTS (Card & Sections)
-   ===================================================================== */
-function createBadge(item) {
-    const isLow = num(item.current_stock) <= num(item.min_stock);
-    return isLow ? `<span class="badge-low">${TEXT.low}</span>` : `<span class="badge-ok">${TEXT.ok}</span>`;
-}
-
-function createFavoriteButton(item) {
-    const isFav = favs.includes(item.id);
-    return `<button class="fav-btn ${isFav ? '' : 'outline'}" data-action="toggleFav" data-id="${item.id}">${isFav ? '★' : '☆'}</button>`;
-}
-
-function createCard(item) {
-    const catTag = item.category ? `<span class="cat-badge">${item.category}</span>` : '';
-    return `
-        <div class="card" id="card_${item.id}">
-            <div id="view_${item.id}">
-                <div class="item-header">
-                    <div>
-                        <div class="item-title">
-                            ${createFavoriteButton(item)}
-                            ${catTag} ${item.item_name}
-                            <button class="icon-btn" data-action="toggleEdit" data-id="${item.id}">⚙️</button>
-                        </div>
-                        <div class="item-meta">現在: <strong style="color:white; font-size:1.05rem;">${item.current_stock}</strong> ${item.unit} / 目標: ${item.min_stock}</div>
-                    </div>
-                    ${createBadge(item)}
-                </div>
-                
-                <div class="stepper-group">
-                    <button class="stepper-btn" data-action="adjustStock" data-id="${item.id}" data-amount="-1">−</button>
-                    <input type="number" class="stepper-input" id="input_${item.id}" value="${item.current_stock}" step="0.1">
-                    <button class="stepper-btn" data-action="adjustStock" data-id="${item.id}" data-amount="1">＋</button>
-                </div>
-                
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <input type="text" id="note_${item.id}" placeholder="メモ (例: 2/3残し)" style="flex: 1; margin-bottom: 0; height: 48px;">
-                    <button class="btn-success" style="width: 48px; height: 48px; margin-top: 0; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border-radius: 8px;" data-action="saveStock" data-id="${item.id}">💾</button>
-                </div>
-            </div>
-
-            <div id="edit_${item.id}" class="hidden">
-                <div style="display:flex; gap:8px; margin-bottom:8px;">
-                    <div style="flex:1;">
-                        <label style="font-size:0.8rem; color:#94a3b8;">分類</label>
-                        <input type="text" id="edit_category_${item.id}" value="${item.category || ''}" list="category-suggestions">
-                    </div>
-                    <div style="flex:2;">
-                        <label style="font-size:0.8rem; color:#94a3b8;">商品名</label>
-                        <input type="text" id="edit_name_${item.id}" value="${item.item_name}">
-                    </div>
-                </div>
-                <div style="display:flex; gap:8px; margin-bottom:12px;">
-                    <div style="flex:1;">
-                        <label style="font-size:0.8rem; color:#94a3b8;">目標値</label>
-                        <input type="number" id="edit_min_${item.id}" value="${item.min_stock}" step="0.5">
-                    </div>
-                    <div style="flex:1;">
-                        <label style="font-size:0.8rem; color:#94a3b8;">単位</label>
-                        <input type="text" id="edit_unit_${item.id}" value="${item.unit}">
-                    </div>
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn-success" style="flex:2; margin-top:0; padding:10px; border-radius:8px; font-weight:bold;" data-action="updateItem" data-id="${item.id}">更新</button>
-                    <button class="btn-danger" style="flex:1;" data-action="deleteItem" data-id="${item.id}">削除</button>
-                    <button class="btn-secondary" style="flex:1;" data-action="toggleEdit" data-id="${item.id}">取消</button>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-// [핵심 최적화] 전체 DOM을 부수지 않고, 특정 카드 1개의 HTML만 교체합니다.
-function updateCardDOM(item) {
-    const card = $(`card_${item.id}`);
-    if (card) {
-        card.outerHTML = createCard(item);
-    }
-}
-
-function renderSection(title, items) {
-    if (items.length === 0) return '';
-    return `<div class="section-title">${title}</div>${items.map(createCard).join('')}`;
-}
-
-/* =====================================================================
    5. CORE LOGIC (Fetch, Render, Actions)
    ===================================================================== */
+
+// 사용자가 카드를 조작 중인지 판별하는 최적화 헬퍼 함수
+function isUserEditingCard(id) {
+    const inputEl = $(`input_${id}`);
+    const item = inventoryData.find(i => i.id === id);
+    if (inputEl && item && Number(inputEl.value) !== Number(item.current_stock)) return true;
+
+    const noteEl = $(`note_${id}`);
+    if (noteEl && noteEl.value.trim() !== '') return true;
+
+    const editPanel = $(`edit_${id}`);
+    if (editPanel && !editPanel.classList.contains('hidden')) return true;
+
+    const cardEl = $(`card_${id}`);
+    if (cardEl && cardEl.contains(document.activeElement)) return true;
+
+    return false;
+}
+
 async function fetchInventory(isSilent = false) {
     const list = $("inventory-list");
     
@@ -224,9 +157,46 @@ async function fetchInventory(isSilent = false) {
         return;
     }
     
-    inventoryData = data;
-    updateCategoryFilter();
-    renderInventory(); // 최초 조회 및 검색 필터 시에만 전체 렌더링 호출
+    // [최적화] 백그라운드 자동 갱신일 경우 화면 파괴 방지
+    if (isSilent && inventoryData.length > 0) {
+        let needFullRender = false;
+
+        if (data.length !== inventoryData.length) {
+            needFullRender = true; 
+        } else {
+            data.forEach(newItem => {
+                const oldItem = inventoryData.find(i => i.id === newItem.id);
+                if (!oldItem) {
+                    needFullRender = true;
+                    return;
+                }
+
+                const isChanged = oldItem.current_stock !== newItem.current_stock ||
+                                  oldItem.min_stock !== newItem.min_stock ||
+                                  oldItem.item_name !== newItem.item_name ||
+                                  oldItem.category !== newItem.category;
+
+                if (isChanged) {
+                    // 사용자가 건드리고 있지 않은 카드만 개별 업데이트
+                    if (!isUserEditingCard(newItem.id)) {
+                        Object.assign(oldItem, newItem);
+                        updateCardDOM(oldItem);
+                    }
+                }
+            });
+        }
+
+        if (needFullRender) {
+            inventoryData = data;
+            updateCategoryFilter();
+            renderInventory();
+        }
+    } else {
+        // 최초 접속 또는 탭 이동 시에는 정상 렌더링
+        inventoryData = data;
+        updateCategoryFilter();
+        renderInventory();
+    }
 }
 
 function renderInventory() {
