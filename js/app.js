@@ -79,7 +79,6 @@ function addRecent(id) {
 }
 
 function triggerDownload(content, fileName) {
-    // data: URI 대신 Blob 방식 사용 (iOS Safari 등 모바일 환경 다운로드 안정성)
     const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
 
@@ -90,7 +89,6 @@ function triggerDownload(content, fileName) {
     link.click();
     document.body.removeChild(link);
 
-    // 메모리 누수 방지: 다운로드 트리거 후 URL 해제
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
@@ -117,14 +115,93 @@ async function sendDiscord(embeds) {
 }
 
 /* =====================================================================
-   5. CORE LOGIC (Fetch, Render, Actions)
+   4. UI COMPONENTS (Card & Sections)
    ===================================================================== */
+function createBadge(item) {
+    const isLow = num(item.current_stock) <= num(item.min_stock);
+    return isLow ? `<span class="badge-low">${TEXT.low}</span>` : `<span class="badge-ok">${TEXT.ok}</span>`;
+}
+
+function createFavoriteButton(item) {
+    const isFav = favs.includes(item.id);
+    return `<button class="fav-btn ${isFav ? '' : 'outline'}" data-action="toggleFav" data-id="${item.id}">${isFav ? '★' : '☆'}</button>`;
+}
+
+function createCard(item) {
+    const catTag = item.category ? `<span class="cat-badge">${item.category}</span>` : '';
+    return `
+        <div class="card" id="card_${item.id}">
+            <div id="view_${item.id}">
+                <div class="item-header">
+                    <div>
+                        <div class="item-title">
+                            ${createFavoriteButton(item)}
+                            ${catTag} ${item.item_name}
+                            <button class="icon-btn" data-action="toggleEdit" data-id="${item.id}">⚙️</button>
+                        </div>
+                        <div class="item-meta">現在: <strong style="color:white; font-size:1.05rem;">${item.current_stock}</strong> ${item.unit} / 目標: ${item.min_stock}</div>
+                    </div>
+                    ${createBadge(item)}
+                </div>
+                
+                <div class="stepper-group">
+                    <button class="stepper-btn" data-action="adjustStock" data-id="${item.id}" data-amount="-1">−</button>
+                    <input type="number" class="stepper-input" id="input_${item.id}" value="${item.current_stock}" step="0.1">
+                    <button class="stepper-btn" data-action="adjustStock" data-id="${item.id}" data-amount="1">＋</button>
+                </div>
+                
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    <input type="text" id="note_${item.id}" placeholder="メモ (例: 2/3残し)" style="flex: 1; margin-bottom: 0; height: 48px;">
+                    <button class="btn-success" style="width: 48px; height: 48px; margin-top: 0; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border-radius: 8px;" data-action="saveStock" data-id="${item.id}">💾</button>
+                </div>
+            </div>
+
+            <div id="edit_${item.id}" class="hidden">
+                <div style="display:flex; gap:8px; margin-bottom:8px;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; color:#94a3b8;">分類</label>
+                        <input type="text" id="edit_category_${item.id}" value="${item.category || ''}" list="category-suggestions">
+                    </div>
+                    <div style="flex:2;">
+                        <label style="font-size:0.8rem; color:#94a3b8;">商品名</label>
+                        <input type="text" id="edit_name_${item.id}" value="${item.item_name}">
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; margin-bottom:12px;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; color:#94a3b8;">目標値</label>
+                        <input type="number" id="edit_min_${item.id}" value="${item.min_stock}" step="0.5">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; color:#94a3b8;">単位</label>
+                        <input type="text" id="edit_unit_${item.id}" value="${item.unit}">
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn-success" style="flex:2; margin-top:0; padding:10px; border-radius:8px; font-weight:bold;" data-action="updateItem" data-id="${item.id}">更新</button>
+                    <button class="btn-danger" style="flex:1;" data-action="deleteItem" data-id="${item.id}">削除</button>
+                    <button class="btn-secondary" style="flex:1;" data-action="toggleEdit" data-id="${item.id}">取消</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function updateCardDOM(item) {
+    const card = $(`card_${item.id}`);
+    if (card) {
+        card.outerHTML = createCard(item);
+    }
+}
 
 function renderSection(title, items) {
     if (items.length === 0) return '';
     return `<div class="section-title">${title}</div>${items.map(createCard).join('')}`;
 }
 
+/* =====================================================================
+   5. CORE LOGIC (Fetch, Render, Actions)
+   ===================================================================== */
 // 사용자가 카드를 조작 중인지 판별하는 최적화 헬퍼 함수
 function isUserEditingCard(id) {
     const inputEl = $(`input_${id}`);
@@ -161,7 +238,7 @@ async function fetchInventory(isSilent = false) {
         showToast(`${TEXT.errLoad}: ${error.message}`);
         return;
     }
-    
+
     // [최적화] 백그라운드 자동 갱신일 경우 화면 파괴 방지
     if (isSilent && inventoryData.length > 0) {
         let needFullRender = false;
@@ -367,14 +444,12 @@ async function saveStock(id) {
     // 2. 백그라운드 저장 로직 수행
     const { error: updateError } = await supabaseClient.from('inventory').update({ current_stock: newQty }).eq('id', id);
     if (updateError) {
-        // DB 통신 실패 시 상태 롤백
         item.current_stock = beforeQty;
         updateCardDOM(item);
         showToast(`${TEXT.errSave}: ${updateError.message}`);
         return;
     }
 
-    // 로그 저장은 실패해도 메인 재고 업데이트를 무효화하지 않음 (오류 분리)
     try {
         await supabaseClient.from('inventory_logs').insert([{
             item_name: item.item_name, before_qty: beforeQty, after_qty: newQty, diff_qty: diff, note: note
@@ -422,7 +497,6 @@ async function saveAllStock() {
             totalDiffs++;
             rollbackData.push({ item, beforeQty });
 
-            // 1. 낙관적 업데이트 즉시 적용 및 개별 카드 렌더링
             item.current_stock = newQty;
             addRecent(item.id);
             updateCardDOM(item);
@@ -453,7 +527,6 @@ async function saveAllStock() {
 
     showToast(`✅ ${totalDiffs}件のデータを一括保存しました！`);
 
-    // 2. 백그라운드 통신 처리
     try {
         await Promise.all(updates);
         
@@ -468,7 +541,6 @@ async function saveAllStock() {
             await sendDiscord([embed]);
         }
     } catch (error) {
-        // 실패 시 개별 카드 단위로 롤백 진행
         for (const backup of rollbackData) {
             backup.item.current_stock = backup.beforeQty;
             updateCardDOM(backup.item);
@@ -481,7 +553,6 @@ async function updateItem(id) {
     const item = inventoryData.find(i => i.id === id);
     if (!item) return;
 
-    // 백업 생성
     const backup = { ...item };
 
     const category = $(`edit_category_${id}`).value || '未分類';
@@ -489,7 +560,6 @@ async function updateItem(id) {
     const min = $(`edit_min_${id}`).value;
     const unit = $(`edit_unit_${id}`).value;
 
-    // 1. 낙관적 업데이트 적용 (이때 뷰 모드로 자동 전환됨)
     item.category = category;
     item.item_name = name;
     item.min_stock = min;
@@ -498,14 +568,13 @@ async function updateItem(id) {
     updateCardDOM(item);
     showToast(`✅ ${TEXT.save}`);
 
-    // 2. 백그라운드 업데이트
     const { error } = await supabaseClient.from('inventory').update({
         category: category, item_name: name, min_stock: min, unit: unit
     }).eq('id', id);
 
     if (error) {
         Object.assign(item, backup);
-        updateCardDOM(item); // 실패 시 편집창이 아니라 이전 데이터 상태의 뷰 모드로 롤백
+        updateCardDOM(item); 
         showToast(`${TEXT.errUpdate}: ${error.message}`);
     }
 }
@@ -518,16 +587,13 @@ async function deleteItem(id) {
 
     const backupItem = inventoryData[index];
 
-    // 1. 메모리에서 삭제 및 DOM에서 대상 카드만 즉시 제거 (전체 렌더 방지)
     inventoryData.splice(index, 1);
     const cardEl = $(`card_${id}`);
     if (cardEl) cardEl.remove();
 
-    // 2. 백그라운드 통신
     const { error } = await supabaseClient.from('inventory').delete().eq('id', id);
     
     if (error) {
-        // 복구: 메모리에 다시 넣고 전체 리렌더링 (단일 롤백 처리를 위해)
         inventoryData.splice(index, 0, backupItem);
         renderInventory();
         showToast(`${TEXT.errDel}: ${error.message}`);
@@ -554,7 +620,6 @@ async function addNewItem() {
         toggleAddPanel();
         showToast(`✅ ${name} 追加しました`);
         
-        // 아이템 신규 추가 시에만 전체 렌더링 호출 (구조 변경이 크므로)
         if (data && data.length > 0) {
             inventoryData.push(data[0]);
             updateCategoryFilter();
@@ -564,7 +629,7 @@ async function addNewItem() {
 }
 
 function exportCSV(type) {
-    let csvContent = "\uFEFF"; // BOM만 유지 (엑셀 한글/일본어 깨짐 방지)
+    let csvContent = "\uFEFF"; 
     if (type === 'current') {
         csvContent += "分類,商品名,現在在庫,目標値,単位\n";
         inventoryData.forEach(r => { csvContent += `"${r.category}","${r.item_name}",${r.current_stock},${r.min_stock},"${r.unit}"\n`; });
@@ -579,7 +644,6 @@ function exportCSV(type) {
 /* =====================================================================
    7. EVENT DELEGATION & INITIALIZATION
    ===================================================================== */
-// HTML에서 inline onclick 이벤트들을 스크립트로 중앙 관리
 document.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -597,7 +661,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// 백그라운드 주기적 동기화 (30초마다)
 setInterval(() => {
     const isUpdateTabActive = !$("tab-update").classList.contains('hidden');
     if (isUpdateTabActive) {
@@ -617,7 +680,6 @@ function unlockApp() {
 function checkAccessCode() {
     const input = $("gate-input").value.trim();
     if (input === window.CONFIG.ACCESS_CODE) {
-        // 접속 성공 시 현재 시간(밀리초)을 저장
         localStorage.setItem('rcs_authed_time', Date.now().toString());
         unlockApp();
     } else {
@@ -626,18 +688,15 @@ function checkAccessCode() {
     }
 }
 
-// Enter 키로도 제출 가능하게
 $("gate-input") && $("gate-input").addEventListener('keydown', (e) => {
     if (e.key === 'Enter') checkAccessCode();
 });
 
-// App Start: 인증 기록이 있고, 저장된 지 1시간(3600000ms) 이내인지 확인
-const AUTH_VALID_TIME = 1000 * 60 * 60; // 1시간 (밀리초 단위)
+const AUTH_VALID_TIME = 1000 * 60 * 60; // 1시간
 const savedTime = localStorage.getItem('rcs_authed_time');
 
 if (savedTime && (Date.now() - Number(savedTime)) < AUTH_VALID_TIME) {
     unlockApp();
 } else {
-    // 1시간이 지났거나 인증 기록이 없으면 기존 데이터를 삭제하고 게이트 화면 대기
     localStorage.removeItem('rcs_authed_time');
 }
