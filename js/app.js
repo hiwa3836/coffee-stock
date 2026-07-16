@@ -601,8 +601,7 @@ setInterval(() => {
 }, 30000);
 
 /* =====================================================================
-   8. ACCESS GATE (URL만으로 우연히 들어오는 것을 막는 최소한의 장치.
-      진짜 보안은 아니며 Supabase RLS 설정과는 별개로 항상 함께 확인할 것)
+   8. ACCESS GATE (1시간 세션 만료 적용)
    ===================================================================== */
 function unlockApp() {
     $("gate-overlay").classList.add("hidden");
@@ -613,7 +612,8 @@ function unlockApp() {
 function checkAccessCode() {
     const input = $("gate-input").value.trim();
     if (input === window.CONFIG.ACCESS_CODE) {
-        localStorage.setItem('rcs_authed', '1');
+        // 접속 성공 시 현재 시간(밀리초)을 저장
+        localStorage.setItem('rcs_authed_time', Date.now().toString());
         unlockApp();
     } else {
         $("gate-error").innerText = "コードが違います";
@@ -626,7 +626,13 @@ $("gate-input") && $("gate-input").addEventListener('keydown', (e) => {
     if (e.key === 'Enter') checkAccessCode();
 });
 
-// App Start: 이전에 인증된 세션이면 바로 통과, 아니면 게이트에서 대기
-if (localStorage.getItem('rcs_authed') === '1') {
+// App Start: 인증 기록이 있고, 저장된 지 1시간(3600000ms) 이내인지 확인
+const AUTH_VALID_TIME = 1000 * 60 * 60; // 1시간 (밀리초 단위)
+const savedTime = localStorage.getItem('rcs_authed_time');
+
+if (savedTime && (Date.now() - Number(savedTime)) < AUTH_VALID_TIME) {
     unlockApp();
+} else {
+    // 1시간이 지났거나 인증 기록이 없으면 기존 데이터를 삭제하고 게이트 화면 대기
+    localStorage.removeItem('rcs_authed_time');
 }
